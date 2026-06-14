@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- This page uses no scripts and makes no API calls, so the policy is stricter
+       than the landing page: deny everything but self, data-URI images, and fonts. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; form-action 'none'; frame-ancestors 'none'" />
+  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), usb=(), serial=(), hid=(), bluetooth=(), midi=(), payment=(), accelerometer=(), gyroscope=(), magnetometer=(), display-capture=(), autoplay=()" />
+
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="description" content="Trayage privacy policy — Trayage collects nothing. No analytics, no telemetry, no servers." />
+
+  <title>Privacy — Trayage</title>
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23161b23'/%3E%3Ctext x='16' y='22' font-family='Georgia,serif' font-size='18' font-weight='bold' fill='%23f1b24a' text-anchor='middle'%3ET%3C/text%3E%3C/svg%3E" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="wrap">
+      <div class="brand"><span class="mark">T</span> Trayage</div>
+      <nav class="nav">
+        <a href="index.html">← Back to Trayage</a>
+        <a class="ext" href="https://github.com/michaelsanford/Trayage">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Privacy</div>
+        <h2>Trayage collects nothing.</h2>
+        <p>No analytics, no telemetry, no tracking, no accounts, no servers of ours. There is
+          nothing to collect because Trayage has nowhere to send it.</p>
+      </div>
+
+      <div class="legal">
+        <h3>What stays on your device</h3>
+        <p>Everything Trayage stores lives only on your own machine, under
+          <code>%APPDATA%\Trayage</code>, and is never transmitted to us:</p>
+        <ul>
+          <li><strong>OAuth tokens</strong> — encrypted at rest with Windows DPAPI (per-user, per-machine).</li>
+          <li><strong>Settings</strong> — your poll interval, theme, and watched repositories.</li>
+          <li><strong>Logs</strong> — a local application log and crash log for troubleshooting.</li>
+        </ul>
+
+        <h3>Where your data goes</h3>
+        <p>Trayage talks <strong>directly</strong> to GitHub and Bitbucket from your machine, as you,
+          using the tokens you authorised — solely to read your inbox and open pages you click.
+          There is no Trayage server in the middle. Your use of those services is governed by
+          their own privacy policies, not this one.</p>
+
+        <h3>This website</h3>
+        <p>This page is a static site hosted on GitHub Pages. It sets no cookies and runs no
+          analytics. In the interest of full honesty, it does make a few third-party requests
+          that necessarily share your IP address with those providers:</p>
+        <ul>
+          <li><strong>GitHub</strong> — serving the page (GitHub Pages) and, on the home page only, a
+            request to the public GitHub API to show the latest release version.</li>
+          <li><strong>Google Fonts</strong> — the page's fonts are loaded from Google's font CDN.</li>
+        </ul>
+        <p>None of these are operated by Trayage, and none receive any personal data from us.</p>
+
+        <h3>Changes</h3>
+        <p>If this policy ever changes, the update will appear here in the repository's history.
+          Questions? Open an issue on
+          <a href="https://github.com/michaelsanford/Trayage/issues">GitHub</a>.</p>
+
+        <p class="updated">Last updated: 14 June 2026</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div>
+        <div class="brand"><span class="mark">T</span> Trayage</div>
+        <p class="muted">Successor to <a href="https://github.com/michaelsanford/bittray">bittray</a>. Not affiliated with or endorsed by GitHub or Atlassian.</p>
+      </div>
+      <div class="f-links">
+        <a href="index.html">Home</a>
+        <a href="https://github.com/michaelsanford/Trayage">Source</a>
+        <a href="https://github.com/michaelsanford/Trayage/blob/main/README.md">README</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

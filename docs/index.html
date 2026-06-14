@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Content Security Policy: deny everything by default; allow only self,
+       inline data-URI images, and Google Fonts (stylesheet + font files).
+       No scripts are used, so script execution stays blocked. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src https://api.github.com; form-action 'none'; frame-ancestors 'none'" />
+
+  <!-- Device / Permissions policy: this page needs no device capabilities, so
+       deny them all. (Honoured when served with headers; declared here as intent.) -->
+  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), usb=(), serial=(), hid=(), bluetooth=(), midi=(), payment=(), accelerometer=(), gyroscope=(), magnetometer=(), display-capture=(), autoplay=()" />
+
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="description" content="Trayage — a .NET 9 Windows tray app that unifies your GitHub and Bitbucket Cloud inbox and raises native toast notifications." />
+
+  <title>Trayage — your GitHub &amp; Bitbucket inbox, in the tray</title>
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23161b23'/%3E%3Ctext x='16' y='22' font-family='Georgia,serif' font-size='18' font-weight='bold' fill='%23f1b24a' text-anchor='middle'%3ET%3C/text%3E%3C/svg%3E" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ============ Top bar ============ -->
+  <header class="topbar">
+    <div class="wrap">
+      <div class="brand"><span class="mark">T</span> Trayage</div>
+      <nav class="nav">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#providers">Providers</a>
+        <a href="#verify">Verify</a>
+        <a class="ext" href="https://github.com/michaelsanford/Trayage">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ============ Hero ============ -->
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <span class="eyebrow reveal d1"><span class="dot"></span> Windows tray · .NET 9 · WPF</span>
+        <h1 class="title reveal d2">Your dev inbox,<br /><span class="grad">quietly in the tray.</span></h1>
+        <p class="lede reveal d3">Trayage gathers your <strong>GitHub</strong> and <strong>Bitbucket Cloud</strong>
+          activity into one place, opens the right page on a click, and raises native
+          Windows toasts only for what you actually care about.</p>
+        <div class="cta reveal d4">
+          <a class="btn btn-primary" href="https://github.com/michaelsanford/Trayage/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+            Download<span id="dlver">&nbsp;latest</span>
+          </a>
+          <a class="btn btn-ghost" href="#verify">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
+            Verify
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/michaelsanford/Trayage">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+      </div>
+
+      <!-- Pure-CSS recreation of the actual inbox flyout -->
+      <div class="mock reveal d5" role="img" aria-label="Trayage inbox flyout showing grouped pull-request and mention items">
+        <div class="mock-head">
+          <h3>Inbox</h3>
+          <div class="mock-tools">
+            <span title="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></span>
+            <span title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7"/></svg></span>
+          </div>
+        </div>
+
+        <div class="group-label">octocat/hello-world</div>
+        <div class="item">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v6a3 3 0 0 0 3 3h6"/></svg></div>
+          <div><div class="it-title">Add retry/backoff to the poller</div><div class="it-sub">Review requested · 4m ago</div></div>
+          <div class="unread"></div>
+        </div>
+        <div class="item">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+          <div><div class="it-title">@you — can you take a look?</div><div class="it-sub">Mention · 22m ago</div></div>
+          <div class="unread"></div>
+        </div>
+
+        <div class="group-label">acme/widgets</div>
+        <div class="item">
+          <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg></div>
+          <div><div class="it-title">CI passed on #482</div><div class="it-sub">Watched repo · 1h ago</div></div>
+        </div>
+
+        <div class="mock-foot">3 items need your attention</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="divider"></div></div>
+
+  <!-- ============ Features ============ -->
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">What it does</div>
+        <h2>One quiet place for everything you'd otherwise miss.</h2>
+        <p>Trayage lives in the notification area and only speaks up when it should.</p>
+      </div>
+      <div class="grid">
+        <article class="card reveal d1">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>
+          <h3>Unified inbox</h3>
+          <p>GitHub and Bitbucket activity merged, de-duplicated, and grouped by repository — newest first, one click to the page.</p>
+        </article>
+        <article class="card reveal d2">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+          <h3>Native toasts</h3>
+          <p>Real Windows notifications, per class of activity. Click one and the right page opens — no inbox archaeology.</p>
+        </article>
+        <article class="card reveal d3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></div>
+          <h3>Watched repos</h3>
+          <p>Pick repositories you care about and get <em>all</em> their activity — even when you're not directly involved.</p>
+        </article>
+        <article class="card reveal d1">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+          <h3>Secure by default</h3>
+          <p>OAuth tokens are encrypted at rest with Windows DPAPI — per-user, per-machine, never in plaintext.</p>
+        </article>
+        <article class="card reveal d2">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+          <h3>Fluent UI</h3>
+          <p>A clean Windows 11 look with light, dark, and system themes — built on WPF and WPF-UI.</p>
+        </article>
+        <article class="card reveal d3">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <h3>Tunable &amp; quiet</h3>
+          <p>Set the poll interval, toggle each notification class, and start with Windows. The first poll never floods you.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ How it works ============ -->
+  <section id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Under the hood</div>
+        <h2>Poll, merge, diff, notify.</h2>
+        <p>A small background loop does the work; the rules decide what's worth a toast.</p>
+      </div>
+      <div class="flow">
+        <div class="step reveal d1"><div class="n"></div><h4>Poll</h4><p>Each connected provider is queried on your chosen interval, honouring server rate-limit hints.</p></div>
+        <div class="step reveal d2"><div class="n"></div><h4>Merge</h4><p>Results become provider-agnostic items, de-duplicated into a single ordered inbox.</p></div>
+        <div class="step reveal d3"><div class="n"></div><h4>Diff</h4><p>The new snapshot is compared with the last, so only genuinely new activity is surfaced.</p></div>
+        <div class="step reveal d4"><div class="n"></div><h4>Notify</h4><p>The rule engine decides which new items toast — by class, or by watched repository.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Providers ============ -->
+  <section id="providers">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Connects to</div>
+        <h2>Two services, one inbox.</h2>
+        <p>Each provider authenticates the way it's meant to — you just click <em>Connect</em>.</p>
+      </div>
+      <div class="providers">
+        <div class="provider reveal d1">
+          <span class="ptag">OAuth device flow</span>
+          <h3>GitHub</h3>
+          <p>Reads your notifications inbox directly via the GitHub API.</p>
+          <ul>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Review requests, mentions &amp; assignments</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> CI / check status changes</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Activity on watched repositories</li>
+          </ul>
+        </div>
+        <div class="provider reveal d2">
+          <span class="ptag">Authorization-code loopback</span>
+          <h3>Bitbucket Cloud</h3>
+          <p>Assembles an inbox from pull-request queries (Bitbucket has no notifications API).</p>
+          <ul>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Pull requests you authored</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Review requests in watched repos</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> All activity in watched repos</li>
+          </ul>
+        </div>
+      </div>
+      <p class="note"><strong>Honest about limits:</strong> because Bitbucket Cloud exposes no notification or
+        mention feed, its mentions and CI status aren't surfaced in this version, and review-request detection is
+        scoped to your watched repositories. See the <a href="https://github.com/michaelsanford/Trayage#known-limitations">README</a> for details.</p>
+    </div>
+  </section>
+
+  <!-- ============ Verify ============ -->
+  <section id="verify">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Trust, but verify</div>
+        <h2>Every release is signed, attested, and inventoried.</h2>
+        <p>Each tagged build carries a GitHub build-provenance attestation, a cosign keyless signature,
+          and a CycloneDX SBOM — check all three in one command.</p>
+      </div>
+      <div class="verify">
+        <div class="term reveal d1" role="img" aria-label="Terminal output of the release verification script, all checks passing">
+          <div class="term-bar"><i></i><i></i><i></i></div>
+<pre><span class="ac">PS&gt;</span> ./Verify-Release.ps1
+<span class="c"># 1/3  GitHub Attestation</span>
+  <span class="ok">[PASS]</span> trayage-v1.0.0-win-x64.zip
+  <span class="ok">[PASS]</span> trayage-v1.0.0-win-arm64.zip
+<span class="c"># 2/3  Cosign Keyless Signature</span>
+  <span class="ok">[PASS]</span> trayage-v1.0.0-win-x64.zip
+  <span class="ok">[PASS]</span> trayage-v1.0.0-win-arm64.zip
+<span class="c"># 3/3  SBOM Integrity (CycloneDX)</span>
+  <span class="ok">[PASS]</span> 84 dependency components listed
+
+  <span class="ok">Release v1.0.0 passed all verification checks.</span></pre>
+        </div>
+        <div class="checks">
+          <div class="check reveal d2">
+            <h4>Provenance</h4>
+            <p>Proves which workflow, commit, and runner built each archive.</p>
+            <code>gh attestation verify</code>
+          </div>
+          <div class="check reveal d3">
+            <h4>Signature</h4>
+            <p>Sigstore keyless signature via GitHub OIDC — no long-lived keys.</p>
+            <code>cosign verify-blob</code>
+          </div>
+          <div class="check reveal d4">
+            <h4>Inventory</h4>
+            <p>A CycloneDX SBOM of the full dependency graph ships with every release.</p>
+            <code>trayage-&lt;tag&gt;-sbom.cdx.json</code>
+          </div>
+        </div>
+      </div>
+
+      <div class="manual reveal d3">
+        <h3 class="manual-h">Or run the checks by hand</h3>
+<pre class="codeblock"><span class="c"># 1 — GitHub build provenance</span>
+gh attestation verify trayage-v1.0.0-win-x64.zip --repo michaelsanford/Trayage
+
+<span class="c"># 2 — cosign keyless signature (identity = the release workflow at that tag)</span>
+cosign verify-blob `
+  --bundle trayage-v1.0.0-win-x64.zip.bundle `
+  --certificate-identity "https://github.com/michaelsanford/Trayage/.github/workflows/release.yml@refs/tags/v1.0.0" `
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" `
+  trayage-v1.0.0-win-x64.zip</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Architecture ============ -->
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">How it's built</div>
+        <h2>Small, layered, testable.</h2>
+      </div>
+      <div class="arch">
+        <div class="arch-row reveal d1"><code>Trayage.App</code><span>WPF + WPF-UI shell — tray icon, inbox flyout, Settings window, toast notifier, and the generic-host DI root.</span></div>
+        <div class="arch-row reveal d2"><code>Trayage.Core</code><span>Provider abstraction, inbox aggregation &amp; diffing, polling service, notification rules, settings, and the DPAPI secret store.</span></div>
+        <div class="arch-row reveal d3"><code>Trayage.Core.Tests</code><span>xUnit coverage over aggregation, diffing, notification rules, settings, the secret store, and provider mappings.</span></div>
+      </div>
+      <div class="badges">
+        <span class="badge"><b>.NET</b> 9</span>
+        <span class="badge"><b>WPF</b> + WPF-UI</span>
+        <span class="badge"><b>Octokit</b></span>
+        <span class="badge"><b>CommunityToolkit</b> MVVM &amp; Notifications</span>
+        <span class="badge"><b>DPAPI</b> token storage</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Footer ============ -->
+  <footer>
+    <div class="wrap">
+      <div>
+        <div class="brand"><span class="mark">T</span> Trayage</div>
+        <p class="muted">Successor to <a href="https://github.com/michaelsanford/bittray">bittray</a>. Not affiliated with or endorsed by GitHub or Atlassian.</p>
+      </div>
+      <div class="f-links">
+        <a href="https://github.com/michaelsanford/Trayage">Source</a>
+        <a href="https://github.com/michaelsanford/Trayage/blob/main/README.md">README</a>
+        <a href="https://github.com/michaelsanford/Trayage/releases">Releases</a>
+        <a href="privacy.html">Privacy</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

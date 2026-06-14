@@ -72,6 +72,40 @@ Everything lives under `%APPDATA%\Trayage\`:
 | `logs\trayage.log` | Rolling application log |
 | `logs\crash.log` | Unhandled-exception records |
 
+## Verifying a release
+
+Every tagged release is built in GitHub Actions and published with supply-chain evidence:
+
+- **GitHub build-provenance attestation** for each `.zip` (proves which workflow, commit, and runner produced it).
+- **cosign keyless signature** — a `.zip.bundle` next to each archive (Sigstore, GitHub OIDC, no long-lived keys).
+- **CycloneDX SBOM** (`trayage-<tag>-sbom.cdx.json`) listing the dependency graph.
+
+### One command
+
+[`Verify-Release.ps1`](Verify-Release.ps1) downloads the release assets and checks all three:
+
+```powershell
+./Verify-Release.ps1                 # latest release
+./Verify-Release.ps1 -Tag v1.0.0     # a specific tag
+```
+
+It needs [`gh`](https://cli.github.com/) and [`cosign`](https://docs.sigstore.dev/cosign/installation/) on `PATH`
+(`winget install GitHub.cli sigstore.cosign`); install `CycloneDX.CLI` too for formal SBOM schema validation.
+
+### By hand
+
+```powershell
+# 1. Build provenance
+gh attestation verify trayage-v1.0.0-win-x64.zip --repo michaelsanford/Trayage
+
+# 2. cosign signature (identity = the release workflow at that tag)
+cosign verify-blob `
+  --bundle trayage-v1.0.0-win-x64.zip.bundle `
+  --certificate-identity "https://github.com/michaelsanford/Trayage/.github/workflows/release.yml@refs/tags/v1.0.0" `
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" `
+  trayage-v1.0.0-win-x64.zip
+```
+
 ## Known limitations
 
 - **Bitbucket mentions and CI/check status are not surfaced.** Bitbucket Cloud has no
