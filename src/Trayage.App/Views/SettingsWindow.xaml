@@ -52,12 +52,27 @@
                             </StackPanel>
                         </ui:CardControl>
 
-                        <TextBlock Text="{Binding GitHubDeviceInstruction}"
-                                   TextWrapping="Wrap"
-                                   Margin="4,0,0,16"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Visibility="{Binding GitHubDeviceInstruction, Converter={StaticResource EmptyStringToCollapsed}}" />
+                        <StackPanel Margin="4,0,0,16"
+                                    Visibility="{Binding GitHubDeviceInstruction, Converter={StaticResource EmptyStringToCollapsed}}">
+                            <TextBlock Text="{Binding GitHubDeviceInstruction}"
+                                       TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Orientation="Horizontal"
+                                        Margin="0,8,0,0"
+                                        Visibility="{Binding GitHubUserCode, Converter={StaticResource EmptyStringToCollapsed}}">
+                                <ui:TextBox Text="{Binding GitHubUserCode, Mode=OneWay}"
+                                            IsReadOnly="True"
+                                            FontFamily="Cascadia Mono, Consolas, monospace"
+                                            FontSize="18"
+                                            MinWidth="150"
+                                            VerticalContentAlignment="Center" />
+                                <ui:Button Content="Copy"
+                                           Icon="{ui:SymbolIcon Copy24}"
+                                           Margin="8,0,0,0"
+                                           Command="{Binding CopyGitHubCodeCommand}" />
+                            </StackPanel>
+                        </StackPanel>
 
                         <ui:CardControl Margin="0,0,0,4">
                             <ui:CardControl.Header>
@@ -186,7 +201,7 @@
                                       MinWidth="120" />
                         </ui:CardControl>
 
-                        <ui:CardControl>
+                        <ui:CardControl Margin="0,0,0,12">
                             <ui:CardControl.Header>
                                 <StackPanel>
                                     <TextBlock Text="Start with Windows" FontWeight="SemiBold" />
@@ -196,6 +211,33 @@
                                 </StackPanel>
                             </ui:CardControl.Header>
                             <ui:ToggleSwitch IsChecked="{Binding StartWithWindows}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Margin="0,0,0,12">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Verbose logging" FontWeight="SemiBold" />
+                                    <TextBlock Text="Capture detailed (debug) logs for bug reports. Applies after restart."
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding VerboseLogging}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl>
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Diagnostic logs" FontWeight="SemiBold" />
+                                    <TextBlock Text="Stored locally; contain no account names or tokens, so they're safe to attach to a bug report."
+                                               TextWrapping="Wrap"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:Button Content="Open logs folder"
+                                       Icon="{ui:SymbolIcon FolderOpen24}"
+                                       Command="{Binding OpenLogsCommand}" />
                         </ui:CardControl>
                     </StackPanel>
                 </ScrollViewer>

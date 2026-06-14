@@ -37,6 +37,7 @@
                 <TextBlock Text="Inbox"
                            FontSize="20"
                            FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            VerticalAlignment="Center" />
                 <StackPanel Orientation="Horizontal"
                             HorizontalAlignment="Right"
@@ -100,15 +101,41 @@
                                    Padding="12,8"
                                    Command="{Binding DataContext.OpenItemCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                    CommandParameter="{Binding}">
-                            <StackPanel>
-                                <TextBlock Text="{Binding Title}"
-                                           TextTrimming="CharacterEllipsis"
-                                           FontWeight="Medium" />
-                                <TextBlock Text="{Binding Subtitle}"
-                                           FontSize="11"
-                                           Margin="0,2,0,0"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                            </StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <!-- Unread mark -->
+                                <Border Grid.Column="0"
+                                        Width="8" Height="8" CornerRadius="4"
+                                        Margin="0,5,10,0"
+                                        VerticalAlignment="Top"
+                                        Background="#4C8DFF"
+                                        Visibility="{Binding IsUnread, Converter={StaticResource BoolToVisibility}}" />
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{Binding Title}"
+                                               TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontWeight" Value="Medium" />
+                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                <Style.Triggers>
+                                                    <!-- Read items are de-emphasised. -->
+                                                    <DataTrigger Binding="{Binding IsUnread}" Value="False">
+                                                        <Setter Property="FontWeight" Value="Normal" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Subtitle}"
+                                               FontSize="11"
+                                               Margin="0,2,0,0"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </Grid>
                         </ui:Button>
                     </DataTemplate>
                 </ListView.ItemTemplate>

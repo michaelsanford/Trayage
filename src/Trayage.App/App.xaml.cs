@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Trayage.App.Logging;
 using Trayage.App.Notifications;
 using Trayage.App.Tray;
@@ -69,9 +70,14 @@ public partial class App : Application
         });
         builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false);
 
+        // Verbosity comes from saved settings (read directly, before DI exists). Verbose mode
+        // captures Debug-level detail for bug reports; logs never contain tokens or logins.
+        var verbose = new JsonSettingsStore(NullLogger<JsonSettingsStore>.Instance).Load().VerboseLogging;
+        var logLevel = verbose ? LogLevel.Debug : LogLevel.Information;
+
         builder.Logging.ClearProviders();
-        builder.Logging.SetMinimumLevel(LogLevel.Information);
-        builder.Logging.AddProvider(new FileLoggerProvider(Path.Combine(TrayagePaths.LogDirectory, "trayage.log")));
+        builder.Logging.SetMinimumLevel(logLevel);
+        builder.Logging.AddProvider(new FileLoggerProvider(Path.Combine(TrayagePaths.LogDirectory, "trayage.log"), logLevel));
         builder.ConfigureTrayageServices();
         _host = builder.Build();
 

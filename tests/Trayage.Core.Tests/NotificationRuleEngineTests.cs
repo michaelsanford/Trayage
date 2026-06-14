@@ -71,6 +71,16 @@ public sealed class NotificationRuleEngineTests
     }
 
     [Fact]
+    public void ReadItem_IsNeverNotified()
+    {
+        // Even a watched-repo item that would otherwise toast is skipped once it's read.
+        var settings = new NotificationSettings { ReviewRequests = true, WatchedRepoActivity = true };
+        var items = new[] { TestData.Item("1", kind: InboxItemKind.ReviewRequest, repo: "acme/widgets", unread: false) };
+
+        Assert.Empty(_engine.SelectNotifiable(items, settings, new[] { "acme/widgets" }));
+    }
+
+    [Fact]
     public void WatchedRepoMatch_IsCaseInsensitive()
     {
         var settings = new NotificationSettings { WatchedRepoActivity = true };

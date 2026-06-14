@@ -90,7 +90,8 @@ public sealed class GitHubProvider : IInboxProvider
         IsConnected = true;
 
         PersistConnectionState(connected: true, login: user.Login);
-        _logger.LogInformation("Connected to GitHub as {Login}.", user.Login);
+        // Note: the account login is PII, so it is not written to the log.
+        _logger.LogInformation("Connected to GitHub.");
     }
 
     public void Disconnect()
@@ -110,11 +111,14 @@ public sealed class GitHubProvider : IInboxProvider
             return Array.Empty<InboxItem>();
         }
 
-        // Unread notifications only — that is the actionable inbox.
-        var request = new NotificationsRequest { All = false };
+        // Read and unread, mirroring the GitHub notifications inbox; the unread flag drives
+        // the read/unread mark in the UI and gates toasts.
+        var request = new NotificationsRequest { All = true };
         var notifications = await _client.Activity.Notifications
             .GetAllForCurrent(request)
             .ConfigureAwait(false);
+
+        _logger.LogDebug("Fetched {Count} GitHub notification(s).", notifications.Count);
 
         // Octokit doesn't surface the X-Poll-Interval header, so we keep a conservative
         // floor; the app default poll interval governs cadence from settings.

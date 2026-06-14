@@ -122,7 +122,8 @@ public sealed class BitbucketProvider : IInboxProvider
             AccountLogin = user?.Username ?? user?.DisplayName;
             IsConnected = true;
             PersistConnectionState(connected: true, login: AccountLogin);
-            _logger.LogInformation("Connected to Bitbucket as {Login}.", AccountLogin);
+            // Note: the account login is PII, so it is not written to the log.
+            _logger.LogInformation("Connected to Bitbucket.");
         }
         finally
         {

@@ -56,6 +56,9 @@ public sealed class TrayageSettings
     /// <summary>Set after the first launch so the welcome flyout is shown only once.</summary>
     public bool FirstRunCompleted { get; set; }
 
+    /// <summary>When true, the file logger captures Debug-level detail (applies on next launch).</summary>
+    public bool VerboseLogging { get; set; }
+
     public NotificationSettings Notifications { get; set; } = new();
 
     /// <summary>"owner/repo" names to surface and toast on for all activity.</summary>

@@ -18,6 +18,8 @@ public sealed class InboxItemViewModel
 
     public string WebUrl => Item.WebUrl;
 
+    public bool IsUnread => Item.IsUnread;
+
     public string ProviderLabel => Item.Provider == ProviderKind.GitHub ? "GitHub" : "Bitbucket";
 
     public string KindLabel => Item.Kind switch

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Trayage.App.Services;
@@ -30,11 +32,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int _pollIntervalSeconds;
     [ObservableProperty] private bool _startWithWindows;
     [ObservableProperty] private AppTheme _selectedTheme;
+    [ObservableProperty] private bool _verboseLogging;
 
     [ObservableProperty] private bool _gitHubConnected;
     [ObservableProperty] private string _gitHubAccountLabel = "Not connected";
     [ObservableProperty] private bool _gitHubBusy;
     [ObservableProperty] private string _gitHubDeviceInstruction = string.Empty;
+    [ObservableProperty] private string _gitHubUserCode = string.Empty;
 
     [ObservableProperty] private bool _bitbucketConnected;
     [ObservableProperty] private string _bitbucketAccountLabel = "Not connected";
@@ -68,27 +72,32 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
 
         GitHubBusy = true;
+        GitHubUserCode = string.Empty;
         GitHubDeviceInstruction = "Requesting a device code from GitHub…";
         try
         {
             await _gitHub.ConnectAsync(prompt =>
             {
-                GitHubDeviceInstruction = $"Enter code  {prompt.UserCode}  at {prompt.VerificationUri} (opening browser…)";
+                GitHubUserCode = prompt.UserCode;
+                GitHubDeviceInstruction = $"Enter this code at {prompt.VerificationUri} (opening your browser…):";
                 InboxViewModel.OpenUrl(prompt.VerificationUri);
                 return Task.CompletedTask;
             }, CancellationToken.None);
 
             GitHubConnected = _gitHub.IsConnected;
             GitHubAccountLabel = _gitHub.AccountLogin is { } login ? $"Connected as {login}" : "Connected";
+            GitHubUserCode = string.Empty;
             GitHubDeviceInstruction = string.Empty;
             _ = _inboxService.RefreshAsync(CancellationToken.None);
         }
         catch (ProviderNotConfiguredException ex)
         {
+            GitHubUserCode = string.Empty;
             GitHubDeviceInstruction = ex.Message;
         }
         catch (Exception ex)
         {
+            GitHubUserCode = string.Empty;
             GitHubDeviceInstruction = $"Connection failed: {ex.Message}";
         }
         finally
@@ -98,11 +107,30 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void CopyGitHubCode()
+    {
+        if (string.IsNullOrEmpty(GitHubUserCode))
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(GitHubUserCode);
+        }
+        catch (Exception)
+        {
+            // Clipboard access can transiently fail; not worth surfacing.
+        }
+    }
+
+    [RelayCommand]
     private void DisconnectGitHub()
     {
         _gitHub.Disconnect();
         GitHubConnected = false;
         GitHubAccountLabel = "Not connected";
+        GitHubUserCode = string.Empty;
         GitHubDeviceInstruction = string.Empty;
         _ = _inboxService.RefreshAsync(CancellationToken.None);
     }
@@ -189,7 +217,22 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnNotifyWatchedRepoActivityChanged(bool value) => Persist();
 
+    [RelayCommand]
+    private static void OpenLogs()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(TrayagePaths.LogDirectory) { UseShellExecute = true });
+        }
+        catch (Exception)
+        {
+            // Opening Explorer shouldn't be able to crash settings.
+        }
+    }
+
     partial void OnPollIntervalSecondsChanged(int value) => Persist();
+
+    partial void OnVerboseLoggingChanged(bool value) => Persist();
 
     partial void OnStartWithWindowsChanged(bool value)
     {
@@ -225,6 +268,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         PollIntervalSeconds = s.PollIntervalSeconds;
         SelectedTheme = s.Theme;
+        VerboseLogging = s.VerboseLogging;
         StartWithWindows = AutostartManager.IsEnabled();
 
         WatchedRepositories.Clear();
@@ -257,6 +301,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         var s = _settings.Load();
         s.PollIntervalSeconds = PollIntervalSeconds;
         s.Theme = SelectedTheme;
+        s.VerboseLogging = VerboseLogging;
         s.StartWithWindows = StartWithWindows;
         s.Notifications.ReviewRequests = NotifyReviewRequests;
         s.Notifications.MentionsAndAssignments = NotifyMentions;

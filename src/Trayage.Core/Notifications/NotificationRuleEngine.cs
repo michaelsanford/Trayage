@@ -24,6 +24,13 @@ public sealed class NotificationRuleEngine
 
     private static bool ShouldNotify(InboxItem item, NotificationSettings settings, HashSet<string> watched)
     {
+        // Only unread activity is worth a toast — the inbox also carries already-read items
+        // so the flyout can mirror the full notifications feed.
+        if (!item.IsUnread)
+        {
+            return false;
+        }
+
         // "All activity on this repo": any item from a watched repo toasts when enabled,
         // regardless of its kind.
         if (settings.WatchedRepoActivity && watched.Contains(item.RepositoryFullName))

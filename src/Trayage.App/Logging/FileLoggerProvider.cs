@@ -11,11 +11,16 @@ namespace Trayage.App.Logging;
 public sealed class FileLoggerProvider : ILoggerProvider
 {
     private readonly string _filePath;
+    private readonly LogLevel _minLevel;
     private readonly object _gate = new();
 
-    public FileLoggerProvider(string filePath) => _filePath = filePath;
+    public FileLoggerProvider(string filePath, LogLevel minLevel = LogLevel.Information)
+    {
+        _filePath = filePath;
+        _minLevel = minLevel;
+    }
 
-    public ILogger CreateLogger(string categoryName) => new FileLogger(categoryName, _filePath, _gate);
+    public ILogger CreateLogger(string categoryName) => new FileLogger(categoryName, _filePath, _minLevel, _gate);
 
     public void Dispose()
     {
@@ -25,18 +30,20 @@ public sealed class FileLoggerProvider : ILoggerProvider
     {
         private readonly string _category;
         private readonly string _filePath;
+        private readonly LogLevel _minLevel;
         private readonly object _gate;
 
-        public FileLogger(string category, string filePath, object gate)
+        public FileLogger(string category, string filePath, LogLevel minLevel, object gate)
         {
             _category = category;
             _filePath = filePath;
+            _minLevel = minLevel;
             _gate = gate;
         }
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Information;
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= _minLevel;
 
         public void Log<TState>(
             LogLevel logLevel,
