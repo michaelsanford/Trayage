@@ -64,6 +64,24 @@ jobs:
           --no-restore
           --output publish
 
+      # Bake the OAuth identifiers into the shipped config. All three live in repo
+      # secrets so forks can't reuse them; note an embedded secret in a desktop app is
+      # not truly confidential (see OAUTH_SETUP.md).
+      - name: Inject OAuth configuration
+        shell: pwsh
+        env:
+          GH_OAUTH_CLIENT_ID: ${{ secrets.GH_OAUTH_CLIENT_ID }}
+          BITBUCKET_OAUTH_KEY: ${{ secrets.BITBUCKET_OAUTH_KEY }}
+          BITBUCKET_OAUTH_SECRET: ${{ secrets.BITBUCKET_OAUTH_SECRET }}
+        run: |
+          $path = "publish/appsettings.json"
+          $json = Get-Content $path -Raw | ConvertFrom-Json
+          $json.GitHub.ClientId   = $env:GH_OAUTH_CLIENT_ID
+          $json.Bitbucket.Key     = $env:BITBUCKET_OAUTH_KEY
+          $json.Bitbucket.Secret  = $env:BITBUCKET_OAUTH_SECRET
+          $json | ConvertTo-Json -Depth 10 | Set-Content $path -Encoding utf8
+          Write-Host "Injected OAuth client identifiers into $path"
+
       - name: Package archive
         shell: pwsh
         run: Compress-Archive -Path publish/* -DestinationPath "trayage-${{ github.ref_name }}-${{ matrix.rid }}.zip"

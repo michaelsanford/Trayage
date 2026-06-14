@@ -1,10 +1,10 @@
 # OAuth setup
 
 Trayage talks to GitHub and Bitbucket **as you**, using OAuth. The app author registers an
-OAuth application with each provider **once** and ships the resulting client identifiers in
-[`src/Trayage.App/appsettings.json`](src/Trayage.App/appsettings.json). End users then
-simply click **Connect** in **Settings → Accounts** and sign in as themselves — they never
-register anything.
+OAuth application with each provider **once**; the resulting client identifiers are supplied
+at build/run time and are **not** committed to source (see
+[Where the credentials go](#where-the-credentials-go)). End users then simply click
+**Connect** in **Settings → Accounts** and sign in as themselves — they never register anything.
 
 Until at least a GitHub Client ID is filled in, the inbox stays empty ("You're all caught
 up") because there is no account to query. That is expected, not a fault.
@@ -21,6 +21,30 @@ up") because there is no account to query. That is expected, not a fault.
     "Scopes": [ "account", "repository", "pullrequest" ],
     "RedirectUri": "http://localhost:33418/callback"
   }
+}
+```
+
+## Where the credentials go
+
+The committed `appsettings.json` ships the **structure** (scopes, redirect URI) with the
+three credential values left **blank**. The real values are layered in from outside source
+control:
+
+| Context | Source of the values |
+| --- | --- |
+| **Local development** | `src/Trayage.App/appsettings.local.json` — gitignored, copied to the build output, and loaded *after* `appsettings.json` so its values win. Put your GitHub `ClientId`, Bitbucket `Key`, and Bitbucket `Secret` there. |
+| **Releases (CI)** | The release workflow injects them into the published `appsettings.json` from repository **secrets**: `GH_OAUTH_CLIENT_ID`, `BITBUCKET_OAUTH_KEY`, `BITBUCKET_OAUTH_SECRET`. |
+
+All three are kept as GitHub Actions **secrets** (not variables) so a fork can't build
+releases using your identifiers. Even so, the Bitbucket secret is embedded in the shipped
+binary and is therefore **not truly confidential** — see the note under *Bitbucket Cloud* below.
+
+Example `appsettings.local.json`:
+
+```json
+{
+  "GitHub": { "ClientId": "Ov23li…" },
+  "Bitbucket": { "Key": "…", "Secret": "…" }
 }
 ```
 

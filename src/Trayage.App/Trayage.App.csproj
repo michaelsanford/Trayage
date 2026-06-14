@@ -13,6 +13,10 @@
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Developer-local credential overrides (gitignored); copied only when present. -->
+    <None Update="appsettings.local.json" Condition="Exists('appsettings.local.json')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

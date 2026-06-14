@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.WinUI.Notifications;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -59,7 +60,15 @@ public partial class App : Application
         // Tray-only: never quit just because no window is open.
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-        var builder = Host.CreateApplicationBuilder();
+        // Anchor configuration to the executable's directory (not the launch CWD) so the
+        // shipped appsettings.json is always found. appsettings.local.json — gitignored —
+        // layers developer credentials on top for local runs.
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            ContentRootPath = AppContext.BaseDirectory,
+        });
+        builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false);
+
         builder.Logging.ClearProviders();
         builder.Logging.SetMinimumLevel(LogLevel.Information);
         builder.Logging.AddProvider(new FileLoggerProvider(Path.Combine(TrayagePaths.LogDirectory, "trayage.log")));
