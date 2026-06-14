@@ -1,0 +1,205 @@
+<ui:FluentWindow x:Class="Trayage.App.Views.SettingsWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="Trayage Settings"
+                 Width="640"
+                 Height="600"
+                 MinWidth="560"
+                 MinHeight="480"
+                 WindowStartupLocation="CenterScreen"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Trayage Settings" />
+
+        <TabControl Grid.Row="1"
+                    TabStripPlacement="Left"
+                    Margin="12,4,12,12"
+                    Background="Transparent"
+                    BorderThickness="0">
+
+            <!-- Accounts -->
+            <TabItem Header="Accounts">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
+                    <StackPanel>
+                        <TextBlock Text="Accounts" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
+
+                        <ui:CardControl Margin="0,0,0,12">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="GitHub" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding GitHubAccountLabel}"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button Content="Connect"
+                                           Appearance="Primary"
+                                           Command="{Binding ConnectGitHubCommand}"
+                                           IsEnabled="{Binding GitHubBusy, Converter={StaticResource InverseBool}}"
+                                           Visibility="{Binding GitHubConnected, Converter={StaticResource InverseBoolToVisibility}}" />
+                                <ui:Button Content="Disconnect"
+                                           Command="{Binding DisconnectGitHubCommand}"
+                                           Visibility="{Binding GitHubConnected, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                        </ui:CardControl>
+
+                        <TextBlock Text="{Binding GitHubDeviceInstruction}"
+                                   TextWrapping="Wrap"
+                                   Margin="4,0,0,16"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Visibility="{Binding GitHubDeviceInstruction, Converter={StaticResource EmptyStringToCollapsed}}" />
+
+                        <ui:CardControl Margin="0,0,0,4">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Bitbucket Cloud" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding BitbucketAccountLabel}"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button Content="Connect"
+                                           Appearance="Primary"
+                                           Command="{Binding ConnectBitbucketCommand}"
+                                           IsEnabled="{Binding BitbucketBusy, Converter={StaticResource InverseBool}}"
+                                           Visibility="{Binding BitbucketConnected, Converter={StaticResource InverseBoolToVisibility}}" />
+                                <ui:Button Content="Disconnect"
+                                           Command="{Binding DisconnectBitbucketCommand}"
+                                           Visibility="{Binding BitbucketConnected, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                        </ui:CardControl>
+                        <TextBlock Text="{Binding BitbucketStatus}"
+                                   TextWrapping="Wrap"
+                                   Margin="4,0,0,0"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Visibility="{Binding BitbucketStatus, Converter={StaticResource EmptyStringToCollapsed}}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Notifications -->
+            <TabItem Header="Notifications">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
+                    <StackPanel>
+                        <TextBlock Text="Notifications" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <TextBlock Text="Choose which kinds of activity raise a Windows toast."
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,16" />
+
+                        <ui:ToggleSwitch Content="Review requests"
+                                         IsChecked="{Binding NotifyReviewRequests}"
+                                         Margin="0,0,0,10" />
+                        <ui:ToggleSwitch Content="Mentions and assignments"
+                                         IsChecked="{Binding NotifyMentions}"
+                                         Margin="0,0,0,10" />
+                        <ui:ToggleSwitch Content="CI / check status changes"
+                                         IsChecked="{Binding NotifyCi}"
+                                         Margin="0,0,0,10" />
+                        <ui:ToggleSwitch Content="All activity on watched repositories"
+                                         IsChecked="{Binding NotifyWatchedRepoActivity}"
+                                         Margin="0,0,0,10" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Watched repos -->
+            <TabItem Header="Watched repos">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
+                    <StackPanel>
+                        <TextBlock Text="Watched repositories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <TextBlock Text="Add repositories (owner/repo) to be notified about all activity, even when you're not directly involved."
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,16" />
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox Grid.Column="0"
+                                        PlaceholderText="owner/repo"
+                                        Text="{Binding NewWatchedRepo, UpdateSourceTrigger=PropertyChanged}"
+                                        Margin="0,0,8,0" />
+                            <ui:Button Grid.Column="1"
+                                       Content="Add"
+                                       Appearance="Primary"
+                                       Command="{Binding AddWatchedRepoCommand}" />
+                        </Grid>
+
+                        <ItemsControl ItemsSource="{Binding WatchedRepositories}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <ui:CardControl Margin="0,0,0,6">
+                                        <ui:CardControl.Header>
+                                            <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+                                        </ui:CardControl.Header>
+                                        <ui:Button Icon="{ui:SymbolIcon Delete24}"
+                                                   Appearance="Secondary"
+                                                   ToolTip="Remove"
+                                                   Command="{Binding DataContext.RemoveWatchedRepoCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                   CommandParameter="{Binding}" />
+                                    </ui:CardControl>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- General -->
+            <TabItem Header="General">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
+                    <StackPanel>
+                        <TextBlock Text="General" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
+
+                        <ui:CardControl Margin="0,0,0,12">
+                            <ui:CardControl.Header>
+                                <TextBlock Text="Check for new activity every" VerticalAlignment="Center" />
+                            </ui:CardControl.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <ComboBox ItemsSource="{Binding PollIntervalOptions}"
+                                          SelectedItem="{Binding PollIntervalSeconds}"
+                                          MinWidth="80" />
+                                <TextBlock Text="seconds" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            </StackPanel>
+                        </ui:CardControl>
+
+                        <ui:CardControl Margin="0,0,0,12">
+                            <ui:CardControl.Header>
+                                <TextBlock Text="Theme" VerticalAlignment="Center" />
+                            </ui:CardControl.Header>
+                            <ComboBox ItemsSource="{Binding Themes}"
+                                      SelectedItem="{Binding SelectedTheme}"
+                                      MinWidth="120" />
+                        </ui:CardControl>
+
+                        <ui:CardControl>
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Start with Windows" FontWeight="SemiBold" />
+                                    <TextBlock Text="Launch Trayage automatically when you sign in."
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding StartWithWindows}" />
+                        </ui:CardControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</ui:FluentWindow>
