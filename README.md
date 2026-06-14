@@ -29,72 +29,37 @@ into a configurable inbox.
 
 ## Requirements
 
-- Windows 10 (1809+) or Windows 11
+- Windows 10 (1809+) or Windows 11 (the app targets `net9.0-windows10.0.19041.0` and uses
+  WPF + WinRT toast APIs, so it builds and runs on Windows only)
 - [.NET 9 SDK](https://dotnet.microsoft.com/download) to build (or the .NET 9 Desktop
-  Runtime to run a published build)
-
-## One-time setup: register the OAuth apps
-
-Trayage talks to each service as *you*. You register an OAuth app **once** and paste the
-identifiers into `src/Trayage.App/appsettings.json`. End users then just click **Connect**
-in Settings and sign in as themselves.
-
-### GitHub (OAuth device flow — no secret needed)
-
-1. GitHub → **Settings → Developer settings → OAuth Apps → New OAuth App**.
-2. Set any name and homepage. The **Authorization callback URL** can be `http://localhost`
-   (unused by the device flow, but GitHub requires a value).
-3. Tick **Enable Device Flow**.
-4. Copy the **Client ID** into `GitHub:ClientId`.
-
-```json
-{
-  "GitHub": { "ClientId": "Iv1.xxxxxxxxxxxx" }
-}
-```
-
-The default scopes (`notifications`, `repo`, `read:org`) cover notifications including those
-from private repositories.
-
-### Bitbucket Cloud (authorization-code flow)
-
-Bitbucket Cloud does **not** support the device flow, so Trayage uses the
-authorization-code flow over a fixed loopback redirect.
-
-1. Bitbucket → **Workspace settings → OAuth consumers → Add consumer**.
-2. Set the **Callback URL** to exactly `http://localhost:33418/callback` (must match
-   `Bitbucket:RedirectUri`).
-3. Grant **Account: Read**, **Repositories: Read**, and **Pull requests: Read**.
-4. Copy the **Key** and **Secret** into `appsettings.json`.
-
-```json
-{
-  "Bitbucket": {
-    "Key": "your-consumer-key",
-    "Secret": "your-consumer-secret",
-    "RedirectUri": "http://localhost:33418/callback"
-  }
-}
-```
-
-> The consumer secret ships embedded in the app. As with `gh` and other desktop clients,
-> this secret is not truly confidential — treat it accordingly.
+  Runtime to run a framework-dependent build)
 
 ## Build & run
 
 ```powershell
-dotnet build
+dotnet build                             # builds the solution
 dotnet test                              # runs the Trayage.Core unit tests
-dotnet run --project src/Trayage.App
+dotnet run --project src/Trayage.App     # launches the tray app
 ```
 
-Then open **Settings → Accounts** and connect GitHub and/or Bitbucket.
+The app runs in the system tray — there is no main window. Left-click the tray icon for the
+inbox flyout; right-click for the menu (Open inbox / Refresh / Settings / Quit).
 
-To produce a standalone build:
+To produce a distributable build for a given architecture:
 
 ```powershell
-dotnet publish src/Trayage.App -c Release -r win-x64 --self-contained false
+dotnet publish src/Trayage.App -c Release -r win-x64   --self-contained
+dotnet publish src/Trayage.App -c Release -r win-arm64 --self-contained
 ```
+
+## Configuration
+
+Trayage authenticates to GitHub and Bitbucket via OAuth. The client identifiers are read
+from [`src/Trayage.App/appsettings.json`](src/Trayage.App/appsettings.json) and must be
+filled in **once** before accounts can be connected — see
+**[OAUTH_SETUP.md](OAUTH_SETUP.md)** for the one-time provider registration steps.
+
+With those in place, open **Settings → Accounts** and click **Connect**.
 
 ## Where Trayage stores data
 
