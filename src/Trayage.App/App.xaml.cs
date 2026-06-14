@@ -102,10 +102,12 @@ public partial class App : Application
             .CreateLogger("Trayage.App")
             .LogInformation("Tray icon registered: {Registered}", registered);
 
-        // Reflect unread state on the tray icon as the inbox changes. The hosted
-        // InboxPollingService performs the first (and recurring) refreshes.
+        // Reflect connection + unread state on the tray icon as the inbox changes.
+        // Connect/disconnect both trigger a refresh, so this also catches sign-in/out.
+        // The hosted InboxPollingService performs the first (and recurring) refreshes.
         var inboxState = _host.Services.GetRequiredService<InboxState>();
-        inboxState.Changed += (_, _) => _tray.SetUnread(inboxState.HasUnread);
+        inboxState.Changed += (_, _) => RefreshTrayStatus();
+        RefreshTrayStatus();
 
         // On the very first launch, pop the inbox flyout so it's obvious Trayage started
         // and where the Settings button is. Shown only once.
@@ -204,6 +206,36 @@ public partial class App : Application
     {
         var inboxService = _host!.Services.GetRequiredService<InboxService>();
         _ = inboxService.RefreshAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Recomputes the tray icon state. Grey ("not connected") means no account has been
+    /// set up at all; once at least one account is configured we follow its connection
+    /// flow — amber when unread items wait, green when caught up — even if the live
+    /// session is momentarily unavailable (e.g. before the first poll restores it).
+    /// Connection state is persisted, so this is stable across the startup gap. May be
+    /// called off the UI thread (e.g. from <see cref="InboxState.Changed"/>); the icon
+    /// swap itself is marshalled to the UI thread.
+    /// </summary>
+    private void RefreshTrayStatus()
+    {
+        if (_tray is null || _host is null)
+        {
+            return;
+        }
+
+        var settings = _host.Services.GetRequiredService<ISettingsStore>().Load();
+        var anyConfigured = settings.GitHub.Connected
+            || settings.Bitbucket.Connected
+            || _host.Services.GetServices<IInboxProvider>().Any(p => p.IsConnected);
+
+        var inboxState = _host.Services.GetRequiredService<InboxState>();
+
+        var status = !anyConfigured ? TrayStatus.Disconnected
+            : inboxState.HasUnread ? TrayStatus.Unread
+            : TrayStatus.CaughtUp;
+
+        _tray.SetStatus(status, inboxState.UnreadCount);
     }
 
     private void ShowSettings() =>

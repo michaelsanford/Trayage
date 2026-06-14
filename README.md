@@ -21,7 +21,8 @@ into a configurable inbox.
 - **Native toast notifications** with per-class toggles (review requests, mentions &
   assignments, CI/check status) plus **all activity on repositories you choose to watch**.
   Clicking a toast opens the page.
-- **Tray icon** changes to indicate when items need your attention.
+- **Tray icon** — a "merging branch" mark that changes colour with state: **grey** when no
+  account is connected, **amber** when items are waiting, **green** when you're caught up.
 - **Settings** window (Accounts, Notifications, Watched repos, General) with light/dark/system
   theme and "start with Windows".
 - **Secure tokens** — OAuth tokens are encrypted at rest with Windows DPAPI; nothing is
@@ -127,6 +128,14 @@ Providers implement `IInboxProvider` and translate their native payloads into a 
 `InboxItem`. `InboxPollingService` refreshes on an interval, the `InboxDiffer` detects new
 activity, and the `NotificationRuleEngine` decides what becomes a toast. The first poll
 after launch is silent so you aren't flooded with notifications for items already waiting.
+
+### Icons
+
+The Trayage mark and all icon assets are generated from a single glyph definition by
+`tools/Build-TrayageIcons.ps1` (PowerShell 7 + GDI+, no external tooling). It emits the
+app/`.exe` icon and the three tray-state glyphs into `src/Trayage.App/Assets/`, plus the
+full-colour OAuth tile under `assets/oauth/`. `assets/trayage-mark.svg` is the committed
+vector master. Re-run the script after changing the glyph.
 
 ## Acknowledgements
 

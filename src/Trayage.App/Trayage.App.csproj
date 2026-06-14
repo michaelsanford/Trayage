@@ -5,7 +5,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- App / .exe icon (also the <ApplicationIcon> below). -->
     <Resource Include="Assets\trayage.ico" />
+    <!-- Tray state glyphs, swapped at runtime by TrayIconService. -->
+    <Resource Include="Assets\trayage-disconnected.ico" />
+    <Resource Include="Assets\trayage-caughtup.ico" />
     <Resource Include="Assets\trayage-unread.ico" />
   </ItemGroup>
 
