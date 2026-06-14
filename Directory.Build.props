@@ -1,0 +1,14 @@
+<Project>
+
+  <!-- Supply-chain hardening for every project in the repo.
+       RestorePackagesWithLockFile pins the full transitive dependency graph into a
+       committed packages.lock.json so restores are reproducible and CI can enforce them
+       in locked mode. NuGetAudit warns on packages with known vulnerabilities. -->
+  <PropertyGroup>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+  </PropertyGroup>
+
+</Project>

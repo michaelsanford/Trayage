@@ -51,8 +51,9 @@ jobs:
         with:
           dotnet-version: '9.x'
 
-      - name: Restore (${{ matrix.rid }})
-        run: dotnet restore src/Trayage.App/Trayage.App.csproj --runtime ${{ matrix.rid }}
+      # RID-agnostic so it can run in locked mode; publish targets one RID below.
+      - name: Restore (locked)
+        run: dotnet restore --locked-mode
 
       - name: Publish self-contained (${{ matrix.rid }})
         run: >-

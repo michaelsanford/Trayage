@@ -29,8 +29,8 @@ jobs:
         with:
           dotnet-version: '9.x'
 
-      - name: Restore
-        run: dotnet restore
+      - name: Restore (locked)
+        run: dotnet restore --locked-mode
 
       - name: Build
         run: dotnet build --configuration Release --no-restore
@@ -53,8 +53,10 @@ jobs:
         with:
           dotnet-version: '9.x'
 
-      - name: Restore (${{ matrix.rid }})
-        run: dotnet restore src/Trayage.App/Trayage.App.csproj --runtime ${{ matrix.rid }}
+      # Restore is RID-agnostic so it can run in locked mode (the lock file pins all
+      # declared RIDs); publish then targets one RID without re-restoring.
+      - name: Restore (locked)
+        run: dotnet restore --locked-mode
 
       - name: Publish (${{ matrix.rid }})
         run: >-
