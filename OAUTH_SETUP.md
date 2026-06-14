@@ -28,7 +28,18 @@ up") because there is no account to query. That is expected, not a fault.
 
 The committed `appsettings.json` ships the **structure** (scopes, redirect URI) with the
 three credential values left **blank**. The real values are layered in from outside source
-control:
+control.
+
+**Which value goes where** — providers label these inconsistently, so map by row:
+
+| Provider | In the provider's UI | Config key | Release secret |
+| --- | --- | --- | --- |
+| GitHub | **Client ID** | `GitHub:ClientId` | `GH_OAUTH_CLIENT_ID` |
+| GitHub | *client secret* | not used — device flow needs none | — |
+| Bitbucket | **Client ID** *(older UIs label this "Key")* | `Bitbucket:Key` | `BITBUCKET_OAUTH_KEY` |
+| Bitbucket | **Secret** | `Bitbucket:Secret` | `BITBUCKET_OAUTH_SECRET` |
+
+And where those values come from per context:
 
 | Context | Source of the values |
 | --- | --- |
@@ -71,7 +82,8 @@ Bitbucket Cloud does **not** support the device flow, so Trayage uses the OAuth
 2. Set the **Callback URL** to exactly `http://localhost:33418/callback`. This must match
    `Bitbucket:RedirectUri`; the port is fixed so it can match the registered callback.
 3. Grant **Account: Read**, **Repositories: Read**, and **Pull requests: Read**.
-4. Copy the **Key** into `Bitbucket:Key` and the **Secret** into `Bitbucket:Secret`.
+4. Copy the **Client ID** (older Bitbucket UIs label this the **Key**) into `Bitbucket:Key`,
+   and the **Secret** into `Bitbucket:Secret`.
 
 > **On the Bitbucket secret:** the consumer secret ships embedded in the distributed app.
 > As with `gh` and other desktop OAuth clients, an embedded secret is not truly
