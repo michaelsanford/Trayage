@@ -38,6 +38,14 @@ public sealed class GitHubMappingTests
     public void Build_UnknownType_FallsBackToRepoHome()
     {
         Assert.Equal("https://github.com/o/r",
-            GitHubWebUrl.Build("https://api.github.com/repos/o/r/something/9", "CheckSuite", "https://github.com/o/r"));
+            GitHubWebUrl.Build("https://api.github.com/repos/o/r/something/9", "RepositoryVulnerabilityAlert", "https://github.com/o/r"));
+    }
+
+    [Fact]
+    public void Build_CheckSuite_PointsAtActionsTab()
+    {
+        // CI notifications carry no subject URL; they should open the Actions tab, not the repo home.
+        Assert.Equal("https://github.com/o/r/actions",
+            GitHubWebUrl.Build(null, "CheckSuite", "https://github.com/o/r"));
     }
 }

@@ -27,6 +27,14 @@ public static class GitHubWebUrl
 {
     public static string Build(string? subjectApiUrl, string? subjectType, string repositoryHtmlUrl)
     {
+        // CI notifications arrive as a CheckSuite subject with no URL; GitHub doesn't expose
+        // the specific run in the notification, so point at the repository's Actions tab —
+        // far more useful than the repository home page.
+        if (subjectType == "CheckSuite")
+        {
+            return $"{repositoryHtmlUrl}/actions";
+        }
+
         if (string.IsNullOrWhiteSpace(subjectApiUrl))
         {
             return repositoryHtmlUrl;
