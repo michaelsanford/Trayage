@@ -173,6 +173,11 @@ public partial class App : Application
             Style = new System.Windows.Style(typeof(Window)),
         };
 
+        // Create the HWND first so it can be marked as a tool window (excluded from the
+        // Alt-Tab switcher) before it's shown; ShowInTaskbar=false alone doesn't do that.
+        _ = new System.Windows.Interop.WindowInteropHelper(host).EnsureHandle();
+        Interop.NativeWindow.HideFromAltTab(host);
+
         host.Show();
         return host;
     }

@@ -24,6 +24,13 @@ public partial class InboxFlyout : Window
         Deactivated += OnDeactivated;
     }
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        // Keep the borderless flyout out of the Alt-Tab switcher.
+        Interop.NativeWindow.HideFromAltTab(this);
+    }
+
     /// <summary>Shows the flyout near the tray, or hides it if already visible.</summary>
     public void Toggle()
     {
