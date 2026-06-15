@@ -3,16 +3,25 @@ name: CI
 # Trayage is a WPF (net9.0-windows) app, so it builds on Windows only.
 on:
   push:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.github/workflows/release.yml'
+    # Only build-relevant changes; docs, assets, tools, .github/**, *.ps1, LICENSE don't trigger CI.
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '**/*.csproj'
+      - '*.sln'
+      - 'Directory.Build.props'
+      - 'global.json'
+      - 'nuget.config'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.github/workflows/release.yml'
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '**/*.csproj'
+      - '*.sln'
+      - 'Directory.Build.props'
+      - 'global.json'
+      - 'nuget.config'
 
 permissions:
   contents: read
