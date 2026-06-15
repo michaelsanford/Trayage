@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest an idea or improvement for Trayage.
+title: "[Feature]: "
+labels: ["enhancement"]
+assignees:
+  - michaelsanford
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Tell us what you'd like and why.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do? What's missing or frustrating today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like Trayage to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Mockups, links, related issues, or anything else that helps.
+    validations:
+      required: false

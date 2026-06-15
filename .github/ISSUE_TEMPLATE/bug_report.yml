@@ -1,0 +1,69 @@
+name: Bug report
+description: Something in the Trayage app isn't working as expected.
+title: "[Bug]: "
+labels: ["bug"]
+assignees:
+  - michaelsanford
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Please fill in the details below.
+
+        **Security vulnerabilities:** do *not* use this form — report them privately via the
+        [security policy](https://github.com/michaelsanford/Trayage/security/policy).
+  - type: input
+    id: version
+    attributes:
+      label: Trayage version
+      description: The release tag, or the commit you built from.
+      placeholder: "v1.0.0 (or commit SHA)"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 23H2 (build 22631)"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: |
+        Attach the log from `%APPDATA%\Trayage\logs\trayage.log`. Logs are scrubbed of account
+        names and tokens, but please skim before posting. Turn on "Verbose logging" in
+        Settings → General for more detail.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      options:
+        - label: I'm using the latest release (or a recent build of `main`).
+          required: true
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
