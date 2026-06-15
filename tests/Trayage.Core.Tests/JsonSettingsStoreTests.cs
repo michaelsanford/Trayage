@@ -15,7 +15,7 @@ public sealed class JsonSettingsStoreTests : IDisposable
     {
         var settings = NewStore().Load();
 
-        Assert.Equal(60, settings.PollIntervalSeconds);
+        Assert.Equal(300, settings.PollIntervalSeconds);
         Assert.True(settings.Notifications.ReviewRequests);
         Assert.Empty(settings.WatchedRepositories);
     }
@@ -60,7 +60,7 @@ public sealed class JsonSettingsStoreTests : IDisposable
     {
         File.WriteAllText(_path, "{ this is not valid json");
 
-        Assert.Equal(60, NewStore().Load().PollIntervalSeconds);
+        Assert.Equal(300, NewStore().Load().PollIntervalSeconds);
     }
 
     [Fact]
