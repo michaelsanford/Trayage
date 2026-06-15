@@ -207,8 +207,11 @@ should go to those providers.
 ## Acknowledgements
 
 Trayage stands on the shoulders of [**bittray**](https://github.com/michaelsanford/bittray),
-its Go predecessor that watched Bitbucket Server for pull requests needing review — hat-tip
-for the original idea. Trayage is not affiliated with or endorsed by GitHub or Atlassian.
+its Go predecessor that watched Bitbucket Server for pull requests needing review a decade ago.
+
+## Disclaimer
+
+Trayage is not affiliated with or endorsed by GitHub or Atlassian.
 
 ## License
 
