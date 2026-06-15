@@ -11,8 +11,8 @@ into a configurable inbox.
 
 ## Features
 
-- **Unified inbox** in a tray flyout, grouped by repository, newest first. Click any item
-  to open it in your browser.
+- **Unified inbox** in a tray flyout — grouped by repository or as a flat newest-first
+  list, with the option to hide already-read items. Click any item to open it in your browser.
 - **Sources**
   - **GitHub** via the notifications API — review requests, mentions, assignments, CI
     activity, and watched-repo activity.
@@ -23,8 +23,9 @@ into a configurable inbox.
   Clicking a toast opens the page.
 - **Tray icon** — a "merging branch" mark that changes colour with state: **grey** when no
   account is connected, **amber** when items are waiting, **green** when you're caught up.
-- **Settings** window (Accounts, Notifications, Watched repos, General) with light/dark/system
-  theme and "start with Windows".
+- **Settings** window (Accounts, Notifications, Watched repos, General): poll cadence,
+  light/dark/system theme, inbox grouping and read-item visibility, verbose logging, and
+  "start with Windows".
 - **Secure tokens** — OAuth tokens are encrypted at rest with Windows DPAPI; nothing is
   stored in plaintext.
 
