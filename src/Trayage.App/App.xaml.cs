@@ -143,6 +143,10 @@ public partial class App : Application
 
         var inboxViewModel = _host!.Services.GetRequiredService<InboxViewModel>();
         inboxViewModel.OpenSettingsRequested += ShowSettings;
+
+        // Apply inbox display options (grouping / show-read) immediately when toggled.
+        var settingsViewModel = _host.Services.GetRequiredService<SettingsViewModel>();
+        settingsViewModel.InboxDisplayChanged += inboxViewModel.ApplyDisplaySettings;
     }
 
     private void Quit()

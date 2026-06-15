@@ -14,11 +14,31 @@
         WindowStartupLocation="Manual">
 
     <Window.Resources>
-        <CollectionViewSource x:Key="GroupedItems" Source="{Binding Items}">
-            <CollectionViewSource.GroupDescriptions>
-                <PropertyGroupDescription PropertyName="RepositoryFullName" />
-            </CollectionViewSource.GroupDescriptions>
-        </CollectionViewSource>
+        <!-- Flat, rounded row that highlights subtly on hover (mirrors the docs .item). -->
+        <Style x:Key="RowButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="10"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Stretch" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#14FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Border Background="{DynamicResource ApplicationBackgroundBrush}"
@@ -69,7 +89,7 @@
                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
 
             <ListView Grid.Row="1"
-                      ItemsSource="{Binding Source={StaticResource GroupedItems}}"
+                      ItemsSource="{Binding ItemsView}"
                       Background="Transparent"
                       BorderThickness="0"
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -78,10 +98,10 @@
                         <GroupStyle.HeaderTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding Name}"
-                                           FontWeight="SemiBold"
-                                           FontSize="12"
-                                           Margin="4,12,0,4"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                           FontFamily="Cascadia Mono, Consolas, monospace"
+                                           FontSize="11"
+                                           Margin="6,12,0,4"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                             </DataTemplate>
                         </GroupStyle.HeaderTemplate>
                     </GroupStyle>
@@ -90,35 +110,41 @@
                     <Style TargetType="ListViewItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                         <Setter Property="Padding" Value="0" />
-                        <Setter Property="Margin" Value="0,2" />
+                        <Setter Property="Margin" Value="0,1" />
                     </Style>
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <ui:Button Appearance="Secondary"
-                                   HorizontalContentAlignment="Left"
-                                   HorizontalAlignment="Stretch"
-                                   Padding="12,8"
-                                   Command="{Binding DataContext.OpenItemCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                   CommandParameter="{Binding}">
+                        <Button Style="{StaticResource RowButton}"
+                                Command="{Binding DataContext.OpenItemCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                CommandParameter="{Binding}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <!-- Unread mark -->
+
+                                <!-- Kind badge -->
                                 <Border Grid.Column="0"
-                                        Width="8" Height="8" CornerRadius="4"
-                                        Margin="0,5,10,0"
+                                        Width="28" Height="28" CornerRadius="7"
+                                        Margin="0,1,10,0"
                                         VerticalAlignment="Top"
-                                        Background="#4C8DFF"
-                                        Visibility="{Binding IsUnread, Converter={StaticResource BoolToVisibility}}" />
-                                <StackPanel Grid.Column="1">
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                        BorderThickness="1">
+                                    <ui:SymbolIcon Symbol="{Binding KindIcon}"
+                                                   FontSize="15"
+                                                   Foreground="#F1B24A" />
+                                </Border>
+
+                                <!-- Title + subtitle -->
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Title}"
                                                TextTrimming="CharacterEllipsis">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
-                                                <Setter Property="FontWeight" Value="Medium" />
+                                                <Setter Property="FontWeight" Value="SemiBold" />
                                                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                                                 <Style.Triggers>
                                                     <!-- Read items are de-emphasised. -->
@@ -133,10 +159,23 @@
                                     <TextBlock Text="{Binding Subtitle}"
                                                FontSize="11"
                                                Margin="0,2,0,0"
+                                               FontFamily="Cascadia Mono, Consolas, monospace"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                 </StackPanel>
+
+                                <!-- Unread dot -->
+                                <Ellipse Grid.Column="2"
+                                         Width="9" Height="9"
+                                         Fill="#E5484D"
+                                         VerticalAlignment="Center"
+                                         Margin="10,0,2,0"
+                                         Visibility="{Binding IsUnread, Converter={StaticResource BoolToVisibility}}">
+                                    <Ellipse.Effect>
+                                        <DropShadowEffect Color="#E5484D" BlurRadius="10" ShadowDepth="0" Opacity="0.7" />
+                                    </Ellipse.Effect>
+                                </Ellipse>
                             </Grid>
-                        </ui:Button>
+                        </Button>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>

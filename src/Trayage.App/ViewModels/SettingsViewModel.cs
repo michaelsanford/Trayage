@@ -33,6 +33,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _startWithWindows;
     [ObservableProperty] private AppTheme _selectedTheme;
     [ObservableProperty] private bool _verboseLogging;
+    [ObservableProperty] private bool _groupByRepository;
+    [ObservableProperty] private bool _showReadItems;
 
     [ObservableProperty] private bool _gitHubConnected;
     [ObservableProperty] private string _gitHubAccountLabel = "Not connected";
@@ -56,6 +58,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         Load();
     }
+
+    /// <summary>Raised when an inbox display option (grouping / show-read) changes.</summary>
+    public event Action? InboxDisplayChanged;
 
     public ObservableCollection<string> WatchedRepositories { get; } = new();
 
@@ -234,6 +239,28 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnVerboseLoggingChanged(bool value) => Persist();
 
+    partial void OnGroupByRepositoryChanged(bool value)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        Persist();
+        InboxDisplayChanged?.Invoke();
+    }
+
+    partial void OnShowReadItemsChanged(bool value)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        Persist();
+        InboxDisplayChanged?.Invoke();
+    }
+
     partial void OnStartWithWindowsChanged(bool value)
     {
         if (_loading)
@@ -269,6 +296,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         PollIntervalSeconds = s.PollIntervalSeconds;
         SelectedTheme = s.Theme;
         VerboseLogging = s.VerboseLogging;
+        GroupByRepository = s.GroupByRepository;
+        ShowReadItems = s.ShowReadItems;
         StartWithWindows = AutostartManager.IsEnabled();
 
         WatchedRepositories.Clear();
@@ -302,6 +331,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.PollIntervalSeconds = PollIntervalSeconds;
         s.Theme = SelectedTheme;
         s.VerboseLogging = VerboseLogging;
+        s.GroupByRepository = GroupByRepository;
+        s.ShowReadItems = ShowReadItems;
         s.StartWithWindows = StartWithWindows;
         s.Notifications.ReviewRequests = NotifyReviewRequests;
         s.Notifications.MentionsAndAssignments = NotifyMentions;

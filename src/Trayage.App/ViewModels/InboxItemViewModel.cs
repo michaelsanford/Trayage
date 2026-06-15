@@ -1,13 +1,21 @@
 using Trayage.Core.Models;
+using Wpf.Ui.Controls;
 
 namespace Trayage.App.ViewModels;
 
 /// <summary>Read-only presentation wrapper around an <see cref="InboxItem"/> for the flyout list.</summary>
 public sealed class InboxItemViewModel
 {
-    public InboxItemViewModel(InboxItem item)
+    private readonly bool _includeRepoInSubtitle;
+
+    /// <param name="includeRepoInSubtitle">
+    /// True when the list is flat (sequential), so the repository name is shown in the
+    /// subtitle; false when grouped by repository (the group header already shows it).
+    /// </param>
+    public InboxItemViewModel(InboxItem item, bool includeRepoInSubtitle = false)
     {
         Item = item;
+        _includeRepoInSubtitle = includeRepoInSubtitle;
     }
 
     public InboxItem Item { get; }
@@ -19,6 +27,8 @@ public sealed class InboxItemViewModel
     public string WebUrl => Item.WebUrl;
 
     public bool IsUnread => Item.IsUnread;
+
+    public DateTimeOffset UpdatedAt => Item.UpdatedAt;
 
     public string ProviderLabel => Item.Provider == ProviderKind.GitHub ? "GitHub" : "Bitbucket";
 
@@ -32,9 +42,22 @@ public sealed class InboxItemViewModel
         _ => Item.Kind.ToString(),
     };
 
+    /// <summary>Per-kind glyph shown in the row badge.</summary>
+    public SymbolRegular KindIcon => Item.Kind switch
+    {
+        InboxItemKind.ReviewRequest => SymbolRegular.BranchFork24,
+        InboxItemKind.Mention => SymbolRegular.Mention24,
+        InboxItemKind.Assignment => SymbolRegular.PersonTag24,
+        InboxItemKind.CiStatus => SymbolRegular.CheckmarkCircle24,
+        InboxItemKind.RepoActivity => SymbolRegular.Eye24,
+        _ => SymbolRegular.Circle24,
+    };
+
     public string RelativeTime => FormatRelative(Item.UpdatedAt);
 
-    public string Subtitle => $"{RepositoryFullName} · {KindLabel} · {RelativeTime}";
+    public string Subtitle => _includeRepoInSubtitle
+        ? $"{RepositoryFullName} · {KindLabel} · {RelativeTime}"
+        : $"{KindLabel} · {RelativeTime}";
 
     private static string FormatRelative(DateTimeOffset when)
     {

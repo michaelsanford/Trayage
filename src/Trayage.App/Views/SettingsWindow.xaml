@@ -204,6 +204,30 @@
                         <ui:CardControl Margin="0,0,0,12">
                             <ui:CardControl.Header>
                                 <StackPanel>
+                                    <TextBlock Text="Group by repository" FontWeight="SemiBold" />
+                                    <TextBlock Text="Group inbox items under each repository. Off shows a single newest-first list."
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding GroupByRepository}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Margin="0,0,0,12">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Show read items" FontWeight="SemiBold" />
+                                    <TextBlock Text="Keep already-read items in the inbox (dimmed). Off shows only unread items."
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding ShowReadItems}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Margin="0,0,0,12">
+                            <ui:CardControl.Header>
+                                <StackPanel>
                                     <TextBlock Text="Start with Windows" FontWeight="SemiBold" />
                                     <TextBlock Text="Launch Trayage automatically when you sign in."
                                                FontSize="12"

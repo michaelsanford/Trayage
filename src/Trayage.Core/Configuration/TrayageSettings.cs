@@ -59,6 +59,12 @@ public sealed class TrayageSettings
     /// <summary>When true, the file logger captures Debug-level detail (applies on next launch).</summary>
     public bool VerboseLogging { get; set; }
 
+    /// <summary>When true, the inbox flyout groups items by repository; otherwise a flat, newest-first list.</summary>
+    public bool GroupByRepository { get; set; } = true;
+
+    /// <summary>When true, the inbox flyout shows read items (de-emphasised); otherwise only unread items appear.</summary>
+    public bool ShowReadItems { get; set; } = true;
+
     public NotificationSettings Notifications { get; set; } = new();
 
     /// <summary>"owner/repo" names to surface and toast on for all activity.</summary>
