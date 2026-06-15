@@ -47,7 +47,7 @@ public sealed class ProviderConnectionState
 /// </summary>
 public sealed class TrayageSettings
 {
-    public int PollIntervalSeconds { get; set; } = 60;
+    public int PollIntervalSeconds { get; set; } = 300;
 
     public AppTheme Theme { get; set; } = AppTheme.System;
 

@@ -12,6 +12,9 @@ using Trayage.Core.Providers.GitHub;
 
 namespace Trayage.App.ViewModels;
 
+/// <summary>A selectable poll cadence: a display label and its value in seconds.</summary>
+public sealed record PollIntervalOption(string Label, int Seconds);
+
 /// <summary>
 /// Drives the Settings window: account connections, notification rules, watched repos,
 /// and general options. Changes persist immediately so there is no explicit Save step.
@@ -66,7 +69,14 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public IReadOnlyList<AppTheme> Themes { get; } = new[] { AppTheme.System, AppTheme.Light, AppTheme.Dark };
 
-    public IReadOnlyList<int> PollIntervalOptions { get; } = new[] { 30, 60, 120, 300, 600, 900 };
+    public IReadOnlyList<PollIntervalOption> PollIntervalOptions { get; } = new[]
+    {
+        new PollIntervalOption("2 minutes", 120),
+        new PollIntervalOption("5 minutes", 300),
+        new PollIntervalOption("15 minutes", 900),
+        new PollIntervalOption("30 minutes", 1800),
+        new PollIntervalOption("1 hour", 3600),
+    };
 
     [RelayCommand]
     private async Task ConnectGitHubAsync()
@@ -293,7 +303,16 @@ public sealed partial class SettingsViewModel : ObservableObject
         NotifyCi = s.Notifications.CiStatus;
         NotifyWatchedRepoActivity = s.Notifications.WatchedRepoActivity;
 
-        PollIntervalSeconds = s.PollIntervalSeconds;
+        // Snap a previously-saved cadence that's no longer offered to the nearest option,
+        // so the dropdown always shows a valid selection. The On…Changed persist is
+        // suppressed during load, so write the migrated value through directly.
+        PollIntervalSeconds = PollIntervalOptions.MinBy(o => Math.Abs(o.Seconds - s.PollIntervalSeconds))!.Seconds;
+        if (PollIntervalSeconds != s.PollIntervalSeconds)
+        {
+            s.PollIntervalSeconds = PollIntervalSeconds;
+            _settings.Save(s);
+        }
+
         SelectedTheme = s.Theme;
         VerboseLogging = s.VerboseLogging;
         GroupByRepository = s.GroupByRepository;

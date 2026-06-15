@@ -184,12 +184,11 @@
                             <ui:CardControl.Header>
                                 <TextBlock Text="Check for new activity every" VerticalAlignment="Center" />
                             </ui:CardControl.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <ComboBox ItemsSource="{Binding PollIntervalOptions}"
-                                          SelectedItem="{Binding PollIntervalSeconds}"
-                                          MinWidth="80" />
-                                <TextBlock Text="seconds" VerticalAlignment="Center" Margin="8,0,0,0" />
-                            </StackPanel>
+                            <ComboBox ItemsSource="{Binding PollIntervalOptions}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Seconds"
+                                      SelectedValue="{Binding PollIntervalSeconds}"
+                                      MinWidth="120" />
                         </ui:CardControl>
 
                         <ui:CardControl Margin="0,0,0,12">
