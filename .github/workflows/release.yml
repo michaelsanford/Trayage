@@ -66,7 +66,7 @@ jobs:
 
       # Bake the OAuth identifiers into the shipped config. All three live in repo
       # secrets so forks can't reuse them; note an embedded secret in a desktop app is
-      # not truly confidential (see OAUTH_SETUP.md).
+      # not truly confidential (see the "OAuth setup" section in README.md).
       - name: Inject OAuth configuration
         shell: pwsh
         env:

@@ -22,6 +22,18 @@ tray app that watched Bitbucket Server for pull requests needing review. Trayage
 the idea on .NET 9 with a Fluent (Windows 11) UI, adds GitHub, and broadens "needs review"
 into a configurable inbox.
 
+**Website:** https://michaelsanford.github.io/Trayage/
+
+## Install
+
+Grab the latest build from the [**Releases**](https://github.com/michaelsanford/Trayage/releases)
+page: download the `.zip` for your architecture (`win-x64` for most PCs, `win-arm64` for
+Arm devices), unzip it anywhere, and run `Trayage.exe`. The build is self-contained — no
+.NET runtime install required. It lands in the system tray; there's no main window.
+
+Each release ships with build provenance, a cosign signature, and a CycloneDX SBOM — see
+[Verifying a release](#verifying-a-release) if you'd like to check them first.
+
 ## Features
 
 - **Unified inbox** in a tray flyout — grouped by repository or as a flat newest-first
@@ -67,14 +79,41 @@ dotnet publish src/Trayage.App -c Release -r win-x64   --self-contained
 dotnet publish src/Trayage.App -c Release -r win-arm64 --self-contained
 ```
 
-## Configuration
+## OAuth setup (source builds only)
 
-Trayage authenticates to GitHub and Bitbucket via OAuth. The client identifiers are read
-from [`src/Trayage.App/appsettings.json`](src/Trayage.App/appsettings.json) and must be
-filled in **once** before accounts can be connected — see
-**[OAUTH_SETUP.md](OAUTH_SETUP.md)** for the one-time provider registration steps.
+Released builds ship with OAuth client identifiers baked in, so **end users never configure
+anything** — they just open **Settings → Accounts** and click **Connect**. This section
+applies only when running from source.
 
-With those in place, open **Settings → Accounts** and click **Connect**.
+Register one OAuth app per provider (once), then drop the identifiers into a gitignored
+`src/Trayage.App/appsettings.local.json` (loaded after, and overriding, the committed
+`appsettings.json`):
+
+```json
+{
+  "GitHub": { "ClientId": "Ov23li…" },
+  "Bitbucket": { "Key": "…", "Secret": "…" }
+}
+```
+
+- **GitHub** — *Settings → Developer settings → OAuth Apps → New OAuth App.* Tick **Enable
+  Device Flow**, set any callback URL (unused by the device flow), and copy the **Client ID**.
+  The device flow needs no client secret.
+- **Bitbucket Cloud** — *Workspace settings → OAuth consumers → Add consumer.* Set the callback
+  to exactly `http://localhost:33418/callback`, grant **Account**, **Repositories**, and
+  **Pull requests** read access, and copy the **Client ID** (older UIs label it the **Key**)
+  and the **Secret**.
+
+| Provider UI field | Config key | Release secret |
+| --- | --- | --- |
+| GitHub **Client ID** | `GitHub:ClientId` | `GH_OAUTH_CLIENT_ID` |
+| Bitbucket **Client ID** / **Key** | `Bitbucket:Key` | `BITBUCKET_OAUTH_KEY` |
+| Bitbucket **Secret** | `Bitbucket:Secret` | `BITBUCKET_OAUTH_SECRET` |
+
+Releases inject these in CI from repository **secrets** (right column). The Bitbucket secret
+ships embedded in the binary, so it isn't truly confidential — treat it as a public
+identifier, as `gh` and other desktop OAuth clients do. Tokens obtained at connect time are
+stored separately and DPAPI-encrypted (see [data storage](#where-trayage-stores-data)).
 
 ## Where Trayage stores data
 
@@ -151,10 +190,24 @@ app/`.exe` icon and the three tray-state glyphs into `src/Trayage.App/Assets/`, 
 full-colour OAuth tile under `assets/oauth/`. `assets/trayage-mark.svg` is the committed
 vector master. Re-run the script after changing the glyph.
 
+## Contributing
+
+Issues and pull requests are welcome. For bugs and feature requests, please use the
+[issue templates](.github/ISSUE_TEMPLATE) — they pre-fill the details that make triage fast.
+Run `dotnet build` and `dotnet test` before opening a PR. By participating you agree to the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+Please report vulnerabilities **privately** — see the [security policy](SECURITY.md). It
+covers the Trayage application itself; issues with GitHub, Bitbucket, or their services
+should go to those providers.
+
 ## Acknowledgements
 
-Successor to [bittray](https://github.com/michaelsanford/bittray). Not affiliated with or
-endorsed by GitHub or Atlassian.
+Trayage stands on the shoulders of [**bittray**](https://github.com/michaelsanford/bittray),
+its Go predecessor that watched Bitbucket Server for pull requests needing review — hat-tip
+for the original idea. Trayage is not affiliated with or endorsed by GitHub or Atlassian.
 
 ## License
 
