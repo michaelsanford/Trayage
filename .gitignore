@@ -23,3 +23,20 @@ secrets/
 # OS
 Thumbs.db
 desktop.ini
+
+
+# JetBrains ReSharper / Tools
+_ReSharper*/
+*.DotSettings.user
+*.dmw
+*.dcvr
+*.dotCover
+*.dtt
+
+# .NET tooling artifacts
+TestResults/
+BenchmarkDotNet.Artifacts/
+PublishProfiles/
+*.nupkg
+*.snupkg
+*.binlog
