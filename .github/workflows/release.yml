@@ -49,7 +49,7 @@ jobs:
 
       - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
         with:
-          dotnet-version: '9.x'
+          dotnet-version: '10.x'
 
       # RID-agnostic so it can run in locked mode; publish targets one RID below.
       - name: Restore (locked)
@@ -116,7 +116,7 @@ jobs:
 
       - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
         with:
-          dotnet-version: '9.x'
+          dotnet-version: '10.x'
 
       - name: Generate CycloneDX SBOM
         run: |

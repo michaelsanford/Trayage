@@ -1,6 +1,6 @@
 name: CI
 
-# Trayage is a WPF (net9.0-windows) app, so it builds on Windows only.
+# Trayage is a WPF (net10.0-windows) app, so it builds on Windows only.
 on:
   push:
     # Only build-relevant changes; docs, assets, tools, .github/**, *.ps1, LICENSE don't trigger CI.
@@ -36,7 +36,7 @@ jobs:
 
       - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
         with:
-          dotnet-version: '9.x'
+          dotnet-version: '10.x'
 
       - name: Restore (locked)
         run: dotnet restore --locked-mode
@@ -60,7 +60,7 @@ jobs:
 
       - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
         with:
-          dotnet-version: '9.x'
+          dotnet-version: '10.x'
 
       # Restore is RID-agnostic so it can run in locked mode (the lock file pins all
       # declared RIDs); publish then targets one RID without re-restoring.
