@@ -4,6 +4,9 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Wpf.Ui.Tray;
+#if DEBUG
+using Trayage.Core.Models;
+#endif
 
 namespace Trayage.App.Tray;
 
@@ -38,6 +41,10 @@ public sealed class TrayIconService : NotifyIconService
     public event Action? RefreshRequested;
     public event Action? SettingsRequested;
     public event Action? QuitRequested;
+#if DEBUG
+    /// <summary>Debug-only developer aid: injects a synthetic item of the given provider/kind into the live stream.</summary>
+    public event Action<ProviderKind, InboxItemKind>? InjectRequested;
+#endif
 
     public TrayIconService()
     {
@@ -114,9 +121,52 @@ public sealed class TrayIconService : NotifyIconService
         menu.Items.Add(new Separator());
         menu.Items.Add(CreateItem("Settings…", () => SettingsRequested?.Invoke()));
         menu.Items.Add(new Separator());
+#if DEBUG
+        // Debug-only developer aid (compiled out of Release/shipping builds): inject a
+        // synthetic item for a given provider/kind to exercise the notification pipeline.
+        menu.Items.Add(BuildInjectMenu());
+        menu.Items.Add(new Separator());
+#endif
         menu.Items.Add(CreateItem("Quit Trayage", () => QuitRequested?.Invoke()));
         return menu;
     }
+
+#if DEBUG
+    // Debug-only developer aid: an "Inject ▸ <provider> ▸ <kind>" menu that pushes a synthetic
+    // item into the live stream so its end-to-end handling can be observed. Each provider lists
+    // only the kinds it can actually surface (see the GitHub and Bitbucket providers).
+    private MenuItem BuildInjectMenu()
+    {
+        var inject = new MenuItem { Header = "Inject" };
+
+        inject.Items.Add(BuildProviderMenu(ProviderKind.GitHub, new[]
+        {
+            InboxItemKind.ReviewRequest, InboxItemKind.Mention, InboxItemKind.Assignment,
+            InboxItemKind.CiStatus, InboxItemKind.RepoActivity,
+        }));
+
+        // Bitbucket has no mention or CI/check feed, so those kinds never originate there.
+        inject.Items.Add(BuildProviderMenu(ProviderKind.Bitbucket, new[]
+        {
+            InboxItemKind.ReviewRequest, InboxItemKind.Assignment, InboxItemKind.RepoActivity,
+        }));
+
+        return inject;
+    }
+
+    private MenuItem BuildProviderMenu(ProviderKind provider, InboxItemKind[] kinds)
+    {
+        var menu = new MenuItem { Header = provider.ToString() };
+        foreach (var kind in kinds)
+        {
+            var capturedProvider = provider;
+            var capturedKind = kind;
+            menu.Items.Add(CreateItem(capturedKind.ToString(), () => InjectRequested?.Invoke(capturedProvider, capturedKind)));
+        }
+
+        return menu;
+    }
+#endif
 
     private static MenuItem CreateItem(string header, Action onClick)
     {

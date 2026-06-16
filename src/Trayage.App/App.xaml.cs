@@ -166,6 +166,9 @@ public partial class App : Application
         tray.OpenInboxRequested += ShowInboxFlyout;
         tray.RefreshRequested += RefreshInbox;
         tray.SettingsRequested += ShowSettings;
+#if DEBUG
+        tray.InjectRequested += InjectItem;
+#endif
 
         var inboxViewModel = _host!.Services.GetRequiredService<InboxViewModel>();
         inboxViewModel.OpenSettingsRequested += ShowSettings;
@@ -296,4 +299,49 @@ public partial class App : Application
             InboxViewModel.OpenUrl(url);
         }
     }
+
+#if DEBUG
+    // Debug-only developer aid, compiled out of Release/shipping builds. Wired to the tray
+    // "Inject ▸ <provider> ▸ <kind>" menu in WireTray; see TrayIconService for the entries.
+    //
+    // Injects a synthetic item for the chosen provider/kind into the live stream — it lands
+    // in InboxState (so the flyout + tray update immediately) and runs through the real
+    // NotificationRuleEngine + notifier, exactly as the poller does, so you can see how the
+    // pipeline responds to your current settings. The next poll overwrites the snapshot with
+    // real provider data, so the injected item is transient.
+    private void InjectItem(Trayage.Core.Models.ProviderKind provider, Trayage.Core.Models.InboxItemKind kind)
+    {
+        var item = SampleItem(provider, kind);
+
+        var state = _host!.Services.GetRequiredService<InboxState>();
+        var settings = _host.Services.GetRequiredService<ISettingsStore>().Load();
+        var rules = _host.Services.GetRequiredService<Trayage.Core.Notifications.NotificationRuleEngine>();
+        var notifier = _host.Services.GetRequiredService<Trayage.Core.Notifications.IToastNotifier>();
+
+        state.Set(new List<Trayage.Core.Models.InboxItem>(state.Items) { item });
+
+        foreach (var notifiable in rules.SelectNotifiable(new[] { item }, settings.Notifications, settings.WatchedRepositories))
+        {
+            notifier.Show(notifiable);
+        }
+    }
+
+    private static Trayage.Core.Models.InboxItem SampleItem(Trayage.Core.Models.ProviderKind provider, Trayage.Core.Models.InboxItemKind kind)
+    {
+        var webUrl = provider == Trayage.Core.Models.ProviderKind.Bitbucket
+            ? "https://bitbucket.org/michaelsanford/trayage/pull-requests/1"
+            : "https://github.com/michaelsanford/Trayage/pull/1";
+
+        return new()
+        {
+            Id = $"debug-{provider}-{kind}-{DateTimeOffset.UtcNow.Ticks}",
+            Provider = provider,
+            Kind = kind,
+            Title = $"[debug] {provider} {kind} — click me",
+            RepositoryFullName = "michaelsanford/Trayage",
+            WebUrl = webUrl,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+    }
+#endif
 }
