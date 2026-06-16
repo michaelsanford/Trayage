@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Trayage brand mark — a "merging branch": a git trunk (node A top, node C base)
-  with one branch (node B) diverging and merging back into the mainline. A nod to
-  triaging pull-request / code activity. This is the canonical full-colour badge
-  (graphite tile + amber glyph, bright merge node) used by the app icon and OAuth
-  tile. The single source of truth for the raster assets is tools/Build-TrayageIcons.ps1,
-  which renders this same geometry with GDI+. Colours mirror docs/styles.css.
+  Trayage brand mark — a blue inbox tray carrying an upward chevron, with a rising
+  sun above it (the "new activity" signal). This is the canonical full-colour badge
+  (graphite tile + blue tray + amber sun) used by the app icon and OAuth tile. The
+  single source of truth for the raster assets is tools/Build-TrayageIcons.ps1, which
+  renders this same geometry with GDI+. Colours mirror docs/styles.css.
 
-  For a monochrome glyph, drop the <rect> tile and set the strokes/fills to
-  currentColor — the geometry is identical.
+  For the glyph alone (no tile), drop the <rect> tile — the docs site does this and
+  lets its CSS supply the graphite tile behind the glyph.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Trayage">
   <defs>
@@ -18,11 +17,22 @@
     </linearGradient>
   </defs>
   <rect x="0.5" y="0.5" width="31" height="31" rx="7" fill="url(#tile)" stroke="#343d4d" stroke-width="1"/>
-  <g fill="none" stroke="#f1b24a" stroke-width="3.36" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M10.24 6.4 V25.6"/>
-    <path d="M23.04 25.6 C23.04 12.8 17.28 6.4 10.24 6.4"/>
+  <!-- Inbox tray: lit front panel + shaded opening + inner lip. -->
+  <polygon points="5.12,16 26.88,16 24.64,27.52 7.36,27.52" fill="#5b97f7"/>
+  <ellipse cx="16" cy="16" rx="10.88" ry="2.72" fill="#2f63c8"/>
+  <ellipse cx="16" cy="16" rx="8.49" ry="2.12" fill="#5b97f7"/>
+  <!-- Upward chevron. -->
+  <polyline points="12.32,23.36 16,19.84 19.68,23.36" fill="none" stroke="#ffd587" stroke-width="2.72" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Rising sun. -->
+  <g stroke="#f1b24a" stroke-width="0.9" stroke-linecap="round">
+    <line x1="19.72" y1="7.68" x2="21.40" y2="7.68"/>
+    <line x1="18.63" y1="10.31" x2="19.82" y2="11.50"/>
+    <line x1="16" y1="11.40" x2="16" y2="13.08"/>
+    <line x1="13.37" y1="10.31" x2="12.18" y2="11.50"/>
+    <line x1="12.28" y1="7.68" x2="10.60" y2="7.68"/>
+    <line x1="13.37" y1="5.05" x2="12.18" y2="3.86"/>
+    <line x1="16" y1="3.96" x2="16" y2="2.28"/>
+    <line x1="18.63" y1="5.05" x2="19.82" y2="3.86"/>
   </g>
-  <circle cx="10.24" cy="25.6" r="3.53" fill="#f1b24a"/>
-  <circle cx="23.04" cy="25.6" r="3.53" fill="#f1b24a"/>
-  <circle cx="10.24" cy="6.4" r="3.53" fill="#ffd587"/>
+  <circle cx="16" cy="7.68" r="2.4" fill="#ffd587"/>
 </svg>

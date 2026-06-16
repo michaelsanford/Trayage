@@ -47,8 +47,10 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
 - **Native toast notifications** with per-class toggles (review requests, mentions &
   assignments, CI/check status) plus **all activity on repositories you choose to watch**.
   Clicking a toast opens the page.
-- **Tray icon** — a "merging branch" mark that changes colour with state: **grey** when no
-  account is connected, **amber** when items are waiting, **green** when you're caught up.
+- **Tray icon** — a blue inbox tray (carrying an upward chevron) whose state shows above it:
+  a **rising sun** when items are waiting, a plain tray when you're caught up, a grey tray with
+  a **?** when nothing is connected, and a red tray with an **✕** when an account is configured
+  but has no live session.
 - **Settings** window (Accounts, Notifications, Watched repos, General): poll cadence,
   light/dark/system theme, inbox grouping and read-item visibility, verbose logging, and
   "start with Windows".
@@ -187,9 +189,10 @@ after launch is silent so you aren't flooded with notifications for items alread
 
 The Trayage mark and all icon assets are generated from a single glyph definition by
 `tools/Build-TrayageIcons.ps1` (PowerShell 7 + GDI+, no external tooling). It emits the
-app/`.exe` icon and the three tray-state glyphs into `src/Trayage.App/Assets/`, plus the
-full-colour OAuth tile under `assets/oauth/`. `assets/trayage-mark.svg` is the committed
-vector master. Re-run the script after changing the glyph.
+app/`.exe` icon and the four tray-state glyphs (caught-up, unread, disconnected, error) into
+`src/Trayage.App/Assets/`, plus the full-colour OAuth tile under `assets/oauth/`.
+`assets/trayage-mark.svg` is the committed vector master. Pass `-Preview` to drop a contact
+sheet of every variant in `tools/preview/` for review. Re-run the script after changing the glyph.
 
 ## Contributing
 

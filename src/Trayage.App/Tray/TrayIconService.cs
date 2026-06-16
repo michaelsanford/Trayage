@@ -26,10 +26,12 @@ public sealed class TrayIconService : NotifyIconService
     private static readonly Uri DisconnectedIconUri = new("pack://application:,,,/Assets/trayage-disconnected.ico", UriKind.Absolute);
     private static readonly Uri CaughtUpIconUri = new("pack://application:,,,/Assets/trayage-caughtup.ico", UriKind.Absolute);
     private static readonly Uri UnreadIconUri = new("pack://application:,,,/Assets/trayage-unread.ico", UriKind.Absolute);
+    private static readonly Uri ErrorIconUri = new("pack://application:,,,/Assets/trayage-error.ico", UriKind.Absolute);
 
     private readonly ImageSource _disconnectedIcon = new BitmapImage(DisconnectedIconUri);
     private readonly ImageSource _caughtUpIcon = new BitmapImage(CaughtUpIconUri);
     private readonly ImageSource _unreadIcon = new BitmapImage(UnreadIconUri);
+    private readonly ImageSource _errorIcon = new BitmapImage(ErrorIconUri);
 
     public event Action? LeftClicked;
     public event Action? OpenInboxRequested;
@@ -47,8 +49,12 @@ public sealed class TrayIconService : NotifyIconService
     /// <summary>
     /// Swaps the tray icon (and tooltip) to reflect the current connection and unread
     /// state. <paramref name="unreadCount"/> is only used to enrich the tooltip text.
+    /// <paramref name="connectionError"/> is consulted only when <paramref name="status"/>
+    /// is <see cref="TrayStatus.Disconnected"/>: when true the icon shows a red "X"
+    /// (a provider is configured but has no live session); when false it shows a "?"
+    /// (nothing is configured).
     /// </summary>
-    public void SetStatus(TrayStatus status, int unreadCount = 0)
+    public void SetStatus(TrayStatus status, int unreadCount = 0, bool connectionError = false)
     {
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null)
@@ -58,17 +64,19 @@ public sealed class TrayIconService : NotifyIconService
 
         dispatcher.Invoke(() =>
         {
-            Icon = status switch
+            Icon = (status, connectionError) switch
             {
-                TrayStatus.Unread => _unreadIcon,
-                TrayStatus.CaughtUp => _caughtUpIcon,
+                (TrayStatus.Unread, _) => _unreadIcon,
+                (TrayStatus.CaughtUp, _) => _caughtUpIcon,
+                (TrayStatus.Disconnected, true) => _errorIcon,
                 _ => _disconnectedIcon,
             };
 
-            TooltipText = status switch
+            TooltipText = (status, connectionError) switch
             {
-                TrayStatus.Unread => unreadCount > 0 ? $"Trayage — {unreadCount} waiting" : "Trayage — items waiting",
-                TrayStatus.CaughtUp => "Trayage — all caught up",
+                (TrayStatus.Unread, _) => unreadCount > 0 ? $"Trayage — {unreadCount} waiting" : "Trayage — items waiting",
+                (TrayStatus.CaughtUp, _) => "Trayage — all caught up",
+                (TrayStatus.Disconnected, true) => "Trayage — connection problem",
                 _ => "Trayage — not connected",
             };
 

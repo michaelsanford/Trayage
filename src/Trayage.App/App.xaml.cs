@@ -234,17 +234,27 @@ public partial class App : Application
         }
 
         var settings = _host.Services.GetRequiredService<ISettingsStore>().Load();
-        var anyConfigured = settings.GitHub.Connected
-            || settings.Bitbucket.Connected
-            || _host.Services.GetServices<IInboxProvider>().Any(p => p.IsConnected);
+        var configured = settings.GitHub.Connected || settings.Bitbucket.Connected;
+        var liveConnected = _host.Services.GetServices<IInboxProvider>().Any(p => p.IsConnected);
 
         var inboxState = _host.Services.GetRequiredService<InboxState>();
 
-        var status = !anyConfigured ? TrayStatus.Disconnected
-            : inboxState.HasUnread ? TrayStatus.Unread
-            : TrayStatus.CaughtUp;
+        // Reason matters for the disconnected glyph: a provider that is configured but has
+        // no live session shows a red "X" (connection problem), while nothing-configured
+        // shows a "?". A live session resolves to the unread/caught-up tray.
+        TrayStatus status;
+        var connectionError = false;
+        if (liveConnected)
+        {
+            status = inboxState.HasUnread ? TrayStatus.Unread : TrayStatus.CaughtUp;
+        }
+        else
+        {
+            status = TrayStatus.Disconnected;
+            connectionError = configured;
+        }
 
-        _tray.SetStatus(status, inboxState.UnreadCount);
+        _tray.SetStatus(status, inboxState.UnreadCount, connectionError);
     }
 
     private void ShowSettings() =>

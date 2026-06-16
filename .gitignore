@@ -20,6 +20,9 @@ secrets/
 # Logs
 *.log
 
+# Icon generator preview contact sheet (Build-TrayageIcons.ps1 -Preview)
+tools/preview/
+
 # OS
 Thumbs.db
 desktop.ini

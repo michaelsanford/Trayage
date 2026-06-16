@@ -11,6 +11,7 @@
     <Resource Include="Assets\trayage-disconnected.ico" />
     <Resource Include="Assets\trayage-caughtup.ico" />
     <Resource Include="Assets\trayage-unread.ico" />
+    <Resource Include="Assets\trayage-error.ico" />
   </ItemGroup>
 
   <ItemGroup>
