@@ -28,7 +28,7 @@ public sealed class BitbucketProvider : IInboxProvider
     private const string TokenEndpoint = "https://bitbucket.org/site/oauth2/access_token";
     private const string AuthorizeEndpoint = "https://bitbucket.org/site/oauth2/authorize";
     private const string ApiBase = "https://api.bitbucket.org/2.0";
-    private const int MaxPagesPerQuery = 3;
+    private const int MaxPagesPerQuery = 5;
 
     private readonly BitbucketOptions _options;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -241,20 +241,41 @@ public sealed class BitbucketProvider : IInboxProvider
 
             if (next is not null)
             {
-                _logger.LogInformation("Bitbucket query {Url} has more pages than the {Max}-page cap; some items omitted.", url, MaxPagesPerQuery);
+                _logger.LogInformation("Bitbucket query {Url} has more pages than the {Max}-page cap; some items omitted.", Redact(url), MaxPagesPerQuery);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "Bitbucket query failed: {Url}", url);
+            _logger.LogWarning(ex, "Bitbucket query failed: {Url}", Redact(url));
         }
 
         return results;
     }
 
+    /// <summary>
+    /// Strips a query string (which can carry <c>reviewers.uuid="…"</c>) and masks the
+    /// signed-in user's UUID in the path so log lines never leak that PII.
+    /// </summary>
+    private string Redact(string url)
+    {
+        var query = url.IndexOf('?');
+        var path = query >= 0 ? url[..query] : url;
+
+        if (_userUuid is { Length: > 0 })
+        {
+            path = path
+                .Replace(Uri.EscapeDataString(_userUuid), "{uuid}", StringComparison.Ordinal)
+                .Replace(_userUuid, "{uuid}", StringComparison.Ordinal);
+        }
+
+        return query >= 0 ? path + "?…" : path;
+    }
+
     private async Task<T?> GetApiAsync<T>(string url, CancellationToken ct) where T : class
     {
-        var response = await SendWithAuthAsync(() => new HttpRequestMessage(HttpMethod.Get, url), ct).ConfigureAwait(false);
+        // SendWithAuthAsync hands ownership to the caller, so we own disposal here.
+        // Disposing the content stream alone would leak the HttpResponseMessage.
+        using var response = await SendWithAuthAsync(() => new HttpRequestMessage(HttpMethod.Get, url), ct).ConfigureAwait(false);
         if (response is null || !response.IsSuccessStatusCode)
         {
             return null;
