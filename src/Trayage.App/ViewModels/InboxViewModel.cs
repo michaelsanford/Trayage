@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
+using Trayage.Core.Models;
 
 namespace Trayage.App.ViewModels;
 
@@ -74,12 +75,21 @@ public sealed partial class InboxViewModel : ObservableObject
     [RelayCommand]
     private void OpenSettings() => OpenSettingsRequested?.Invoke();
 
-    /// <summary>Opens a URL in the user's default browser.</summary>
+    /// <summary>Opens an https URL in the user's default browser.</summary>
     public static void OpenUrl(string url)
     {
+        // Only hand https URLs to the shell. Every link we open (inbox items, OAuth
+        // verification/authorize URIs) is https, so this rejects nothing legitimate while
+        // refusing to launch a hostile scheme from a malformed provider response.
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         try
         {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
         }
         catch (Exception)
         {
@@ -94,36 +104,70 @@ public sealed partial class InboxViewModel : ObservableObject
     private void OnStateChanged(object? sender, EventArgs e) =>
         Application.Current?.Dispatcher.Invoke(Rebuild);
 
+    private bool? _lastGroupByRepo;
+
     private void Rebuild()
     {
         var settings = _settings.Load();
         var groupByRepo = settings.GroupByRepository;
+        var includeRepo = !groupByRepo;
 
-        Items.Clear();
-        var source = _state.Items.AsEnumerable();
-        if (!settings.ShowReadItems)
+        // Index the current wrappers so unchanged items keep their existing instance
+        // (no allocation, no rebind) and only genuinely changed slots fire collection events.
+        var existing = new Dictionary<(ProviderKind, string), InboxItemViewModel>();
+        foreach (var vm in Items)
         {
-            source = source.Where(i => i.IsUnread);
+            existing[vm.Item.Key] = vm;
         }
 
-        foreach (var item in source)
+        var target = new List<InboxItemViewModel>(Items.Count);
+        foreach (var item in _state.Items)
         {
-            Items.Add(new InboxItemViewModel(item, includeRepoInSubtitle: !groupByRepo));
-        }
-
-        using (ItemsView.DeferRefresh())
-        {
-            ItemsView.GroupDescriptions.Clear();
-            ItemsView.SortDescriptions.Clear();
-            if (groupByRepo)
+            if (!settings.ShowReadItems && !item.IsUnread)
             {
-                ItemsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(InboxItemViewModel.RepositoryFullName)));
+                continue;
+            }
+
+            // Reuse only when the underlying (immutable) item is value-equal and the subtitle
+            // layout, which depends on groupByRepo, hasn't flipped since the last render.
+            if (groupByRepo == _lastGroupByRepo &&
+                existing.TryGetValue(item.Key, out var vm) && vm.Item == item)
+            {
+                target.Add(vm);
             }
             else
             {
-                // Flat list: newest first.
-                ItemsView.SortDescriptions.Add(new SortDescription(nameof(InboxItemViewModel.UpdatedAt), ListSortDirection.Descending));
+                target.Add(new InboxItemViewModel(item, includeRepoInSubtitle: includeRepo));
             }
+        }
+
+        var changed = SyncItems(target);
+
+        var groupingChanged = groupByRepo != _lastGroupByRepo;
+        if (groupingChanged)
+        {
+            using (ItemsView.DeferRefresh())
+            {
+                ItemsView.GroupDescriptions.Clear();
+                ItemsView.SortDescriptions.Clear();
+                if (groupByRepo)
+                {
+                    ItemsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(InboxItemViewModel.RepositoryFullName)));
+                }
+                else
+                {
+                    // Flat list: newest first.
+                    ItemsView.SortDescriptions.Add(new SortDescription(nameof(InboxItemViewModel.UpdatedAt), ListSortDirection.Descending));
+                }
+            }
+
+            _lastGroupByRepo = groupByRepo;
+        }
+
+        // Nothing visible moved; skip the status/notify work too.
+        if (!changed && !groupingChanged)
+        {
+            return;
         }
 
         var unread = Items.Count(i => i.IsUnread);
@@ -133,5 +177,40 @@ public sealed partial class InboxViewModel : ObservableObject
             : unread == 0
                 ? $"{Items.Count} item{(Items.Count == 1 ? string.Empty : "s")}, all read."
                 : $"{unread} item{(unread == 1 ? string.Empty : "s")} need your attention.";
+    }
+
+    /// <summary>
+    /// Reconciles <see cref="Items"/> to <paramref name="target"/> in place (replace/append/trim)
+    /// rather than Clear()+rebuild, so a poll that changes nothing produces no collection events.
+    /// Returns whether the collection was modified.
+    /// </summary>
+    private bool SyncItems(IReadOnlyList<InboxItemViewModel> target)
+    {
+        var changed = false;
+
+        for (var i = 0; i < target.Count; i++)
+        {
+            if (i < Items.Count)
+            {
+                if (!ReferenceEquals(Items[i], target[i]))
+                {
+                    Items[i] = target[i];
+                    changed = true;
+                }
+            }
+            else
+            {
+                Items.Add(target[i]);
+                changed = true;
+            }
+        }
+
+        while (Items.Count > target.Count)
+        {
+            Items.RemoveAt(Items.Count - 1);
+            changed = true;
+        }
+
+        return changed;
     }
 }
