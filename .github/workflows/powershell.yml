@@ -4,6 +4,9 @@ name: PowerShell Lint
 # (or this workflow) change. Surfaces Error-severity diagnostics only.
 on:
   push:
+    # Only on main: PR branches are validated by the pull_request trigger below, so
+    # restricting push to main avoids running the analysis twice on a branch with an open PR.
+    branches: [main]
     paths:
       - '**/*.ps1'
       - '**/*.psm1'

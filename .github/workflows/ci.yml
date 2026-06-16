@@ -3,6 +3,9 @@ name: CI
 # Trayage is a WPF (net10.0-windows) app, so it builds on Windows only.
 on:
   push:
+    # Only on main: PR branches are validated by the pull_request trigger below, so
+    # restricting push to main avoids running every job twice on a branch with an open PR.
+    branches: [main]
     # Only build-relevant changes; docs, assets, tools, .github/**, *.ps1, LICENSE don't trigger CI.
     paths:
       - 'src/**'
