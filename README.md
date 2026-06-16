@@ -129,6 +129,10 @@ Everything lives under `%APPDATA%\Trayage\`:
 | `logs\trayage.log` | Rolling application log |
 | `logs\crash.log` | Unhandled-exception records |
 
+Logs stay on your machine and are never transmitted. Tokens are never written to them, and
+Trayage keeps account identifiers — your provider login and user ID — out of the logs on a
+best-effort basis.
+
 ## Verifying a release
 
 Every tagged release is built in GitHub Actions and published with supply-chain evidence:
