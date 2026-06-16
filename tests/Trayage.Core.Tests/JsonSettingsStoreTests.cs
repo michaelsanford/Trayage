@@ -64,6 +64,64 @@ public sealed class JsonSettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void Load_ReturnsIndependentInstances()
+    {
+        var store = NewStore();
+        store.Save(new TrayageSettings { PollIntervalSeconds = 111, WatchedRepositories = { "a/b" } });
+
+        var first = store.Load();
+        first.PollIntervalSeconds = 999;
+        first.WatchedRepositories.Add("x/y");
+        first.GitHub.Connected = true;
+
+        var second = store.Load();
+        Assert.Equal(111, second.PollIntervalSeconds);
+        Assert.Equal(new[] { "a/b" }, second.WatchedRepositories);
+        Assert.False(second.GitHub.Connected);
+    }
+
+    [Fact]
+    public void Load_ServesFromCache_WhenTimestampUnchanged()
+    {
+        var store = NewStore();
+        store.Save(new TrayageSettings { PollIntervalSeconds = 111 });
+        var stamp = File.GetLastWriteTimeUtc(_path);
+
+        Assert.Equal(111, store.Load().PollIntervalSeconds);
+
+        // Change the content but restore the original timestamp: a cache keyed on mtime
+        // must return the previously parsed value rather than re-reading the file.
+        File.WriteAllText(_path, "{\"PollIntervalSeconds\":999}");
+        File.SetLastWriteTimeUtc(_path, stamp);
+
+        Assert.Equal(111, store.Load().PollIntervalSeconds);
+    }
+
+    [Fact]
+    public void Load_Reparses_WhenTimestampChanges()
+    {
+        var store = NewStore();
+        store.Save(new TrayageSettings { PollIntervalSeconds = 111 });
+        Assert.Equal(111, store.Load().PollIntervalSeconds);
+
+        File.WriteAllText(_path, "{\"PollIntervalSeconds\":222}");
+        File.SetLastWriteTimeUtc(_path, DateTime.UtcNow.AddSeconds(5));
+
+        Assert.Equal(222, store.Load().PollIntervalSeconds);
+    }
+
+    [Fact]
+    public void Load_AfterSave_ReflectsSavedValues()
+    {
+        var store = NewStore();
+        store.Save(new TrayageSettings { PollIntervalSeconds = 111 });
+        Assert.Equal(111, store.Load().PollIntervalSeconds);
+
+        store.Save(new TrayageSettings { PollIntervalSeconds = 222 });
+        Assert.Equal(222, store.Load().PollIntervalSeconds);
+    }
+
+    [Fact]
     public void IsKindEnabled_MapsKindsToToggles()
     {
         var n = new NotificationSettings { ReviewRequests = true, CiStatus = false, MentionsAndAssignments = true };

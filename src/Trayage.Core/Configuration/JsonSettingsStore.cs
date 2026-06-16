@@ -19,6 +19,14 @@ public sealed class JsonSettingsStore : ISettingsStore
 
     private readonly ILogger<JsonSettingsStore> _logger;
     private readonly string _filePath;
+    private readonly object _gate = new();
+
+    // Cached parse of the settings file, keyed on its last-write time. Load() is called
+    // several times per poll cycle (and on every inbox state change), so this avoids
+    // re-reading and re-deserialising the file each time while still picking up external
+    // edits (a cheap metadata stat invalidates the cache when the timestamp moves).
+    private TrayageSettings? _cache;
+    private DateTime _cacheStampUtc;
 
     public JsonSettingsStore(ILogger<JsonSettingsStore> logger, string? filePath = null)
     {
@@ -30,20 +38,33 @@ public sealed class JsonSettingsStore : ISettingsStore
 
     public TrayageSettings Load()
     {
-        if (!File.Exists(_filePath))
+        lock (_gate)
         {
-            return new TrayageSettings();
-        }
+            if (!File.Exists(_filePath))
+            {
+                _cache = null;
+                return new TrayageSettings();
+            }
 
-        try
-        {
-            var json = File.ReadAllText(_filePath);
-            return JsonSerializer.Deserialize<TrayageSettings>(json, SerializerOptions) ?? new TrayageSettings();
-        }
-        catch (Exception ex) when (ex is JsonException or IOException)
-        {
-            _logger.LogWarning(ex, "Failed to read settings from {Path}; falling back to defaults.", _filePath);
-            return new TrayageSettings();
+            var stampUtc = File.GetLastWriteTimeUtc(_filePath);
+            if (_cache is not null && stampUtc == _cacheStampUtc)
+            {
+                return _cache.Clone();
+            }
+
+            try
+            {
+                var json = File.ReadAllText(_filePath);
+                _cache = JsonSerializer.Deserialize<TrayageSettings>(json, SerializerOptions) ?? new TrayageSettings();
+                _cacheStampUtc = stampUtc;
+                return _cache.Clone();
+            }
+            catch (Exception ex) when (ex is JsonException or IOException)
+            {
+                _logger.LogWarning(ex, "Failed to read settings from {Path}; falling back to defaults.", _filePath);
+                _cache = null;
+                return new TrayageSettings();
+            }
         }
     }
 
@@ -51,18 +72,25 @@ public sealed class JsonSettingsStore : ISettingsStore
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        var json = JsonSerializer.Serialize(settings, SerializerOptions);
-        var tempPath = _filePath + ".tmp";
-        File.WriteAllText(tempPath, json);
+        lock (_gate)
+        {
+            var json = JsonSerializer.Serialize(settings, SerializerOptions);
+            var tempPath = _filePath + ".tmp";
+            File.WriteAllText(tempPath, json);
 
-        // File.Replace requires the destination to exist; fall back to Move on first save.
-        if (File.Exists(_filePath))
-        {
-            File.Replace(tempPath, _filePath, destinationBackupFileName: null);
-        }
-        else
-        {
-            File.Move(tempPath, _filePath);
+            // File.Replace requires the destination to exist; fall back to Move on first save.
+            if (File.Exists(_filePath))
+            {
+                File.Replace(tempPath, _filePath, destinationBackupFileName: null);
+            }
+            else
+            {
+                File.Move(tempPath, _filePath);
+            }
+
+            // Refresh the cache from what we just wrote so the next Load() is a hit.
+            _cache = settings.Clone();
+            _cacheStampUtc = File.GetLastWriteTimeUtc(_filePath);
         }
     }
 }

@@ -73,4 +73,29 @@ public sealed class TrayageSettings
     public ProviderConnectionState GitHub { get; set; } = new();
 
     public ProviderConnectionState Bitbucket { get; set; } = new();
+
+    /// <summary>
+    /// Deep copy. Lets the settings store cache one canonical instance yet hand callers
+    /// independent objects, so the common load → mutate → save pattern can't corrupt the cache.
+    /// </summary>
+    public TrayageSettings Clone() => new()
+    {
+        PollIntervalSeconds = PollIntervalSeconds,
+        Theme = Theme,
+        StartWithWindows = StartWithWindows,
+        FirstRunCompleted = FirstRunCompleted,
+        VerboseLogging = VerboseLogging,
+        GroupByRepository = GroupByRepository,
+        ShowReadItems = ShowReadItems,
+        Notifications = new NotificationSettings
+        {
+            ReviewRequests = Notifications.ReviewRequests,
+            MentionsAndAssignments = Notifications.MentionsAndAssignments,
+            CiStatus = Notifications.CiStatus,
+            WatchedRepoActivity = Notifications.WatchedRepoActivity,
+        },
+        WatchedRepositories = new List<string>(WatchedRepositories),
+        GitHub = new ProviderConnectionState { Connected = GitHub.Connected, AccountLogin = GitHub.AccountLogin },
+        Bitbucket = new ProviderConnectionState { Connected = Bitbucket.Connected, AccountLogin = Bitbucket.AccountLogin },
+    };
 }
