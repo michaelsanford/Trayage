@@ -50,10 +50,10 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
   [Windows App Runtime](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads);
   if it isn't present Trayage still runs and tracks your inbox from the tray, and **Settings →
   Notifications** shows a one-click link to install it.
-- **Tray icon** — a blue inbox tray (carrying an upward chevron) whose state shows above it:
-  a **rising sun** when items are waiting, a plain tray when you're caught up, a grey tray with
-  a **?** when nothing is connected, and a red tray with an **✕** when an account is configured
-  but has no live session.
+- **Tray icon** — three descending priority bars (a sorted queue) whose tint reflects state:
+  blue with an **amber top bar** when items are waiting, plain blue when you're caught up,
+  **grey** when nothing is connected, and **red** when an account is configured but has no
+  live session.
 - **Settings** window (Accounts, Notifications, Watched repos, General): poll cadence,
   light/dark/system theme, inbox grouping and read-item visibility, verbose logging, and
   "start with Windows".
