@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Trayage brand mark — a blue inbox tray carrying an upward chevron, with a rising
-  sun above it (the "new activity" signal). This is the canonical full-colour badge
-  (graphite tile + blue tray + amber sun) used by the app icon and OAuth tile. The
-  single source of truth for the raster assets is tools/Build-TrayageIcons.ps1, which
+  Trayage brand mark — three descending priority bars, a sorted queue: triage distilled to
+  its essence. The top bar is accented amber ("act on this first"). This is the canonical
+  full-colour badge (graphite tile + accented bars) used by the app icon and OAuth tile.
+  The single source of truth for the raster assets is tools/Build-TrayageIcons.ps1, which
   renders this same geometry with GDI+. Colours mirror docs/styles.css.
 
-  For the glyph alone (no tile), drop the <rect> tile — the docs site does this and
-  lets its CSS supply the graphite tile behind the glyph.
+  For the glyph alone (no tile), drop the <rect> tile — the docs site does this and lets
+  its CSS supply the graphite tile behind the bars.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Trayage">
   <defs>
@@ -17,23 +17,10 @@
     </linearGradient>
   </defs>
   <rect x="0.5" y="0.5" width="31" height="31" rx="7" fill="url(#tile)" stroke="#343d4d" stroke-width="1"/>
-  <!-- Inbox tray: lit front panel + shaded opening + inner lip. Glyph enlarged 1.08x about
-       the composition centroid (16, 14.9) to match the regenerated raster assets. -->
-  <polygon points="4.25,16.09 27.75,16.09 25.33,28.53 6.67,28.53" fill="#5b97f7"/>
-  <ellipse cx="16" cy="16.09" rx="11.75" ry="2.94" fill="#2f63c8"/>
-  <ellipse cx="16" cy="16.09" rx="9.17" ry="2.29" fill="#5b97f7"/>
-  <!-- Upward chevron. -->
-  <polyline points="12.03,24.04 16,20.24 19.97,24.04" fill="none" stroke="#ffd587" stroke-width="2.94" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Rising sun. -->
-  <g stroke="#f1b24a" stroke-width="1.24" stroke-linecap="round">
-    <line x1="20.56" y1="7.1" x2="21.7" y2="7.1"/>
-    <line x1="19.23" y1="10.33" x2="20.03" y2="11.13"/>
-    <line x1="16" y1="11.66" x2="16" y2="12.81"/>
-    <line x1="12.77" y1="10.33" x2="11.97" y2="11.13"/>
-    <line x1="11.44" y1="7.1" x2="10.3" y2="7.1"/>
-    <line x1="12.77" y1="3.88" x2="11.97" y2="3.07"/>
-    <line x1="16" y1="2.54" x2="16" y2="1.4"/>
-    <line x1="19.23" y1="3.88" x2="20.03" y2="3.07"/>
+  <!-- Three descending priority bars; top one accented amber. -->
+  <g stroke-width="4.32" stroke-linecap="round">
+    <line x1="6.4" y1="9.6" x2="26.88" y2="9.6" stroke="#ffd587"/>
+    <line x1="6.4" y1="16" x2="20.48" y2="16" stroke="#5b97f7"/>
+    <line x1="6.4" y1="22.4" x2="14.72" y2="22.4" stroke="#5b97f7"/>
   </g>
-  <circle cx="16" cy="7.1" r="3.8" fill="#ffd587"/>
 </svg>
