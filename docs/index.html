@@ -119,7 +119,7 @@
         <article class="card reveal d2">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
           <h3>Native toasts</h3>
-          <p>Real Windows notifications, per class of activity. Click one and the right page opens — no inbox archaeology.</p>
+          <p>Real Windows notifications, per class of activity. Click one and the right page opens — no inbox archaeology. They use the Windows App Runtime; without it Trayage still tracks your inbox in the tray, and Settings links you straight to the install.</p>
         </article>
         <article class="card reveal d3">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></div>
@@ -269,10 +269,11 @@ cosign verify-blob `
         <div class="arch-row reveal d3"><code>Trayage.Core.Tests</code><span>xUnit coverage over aggregation, diffing, notification rules, settings, the secret store, and provider mappings.</span></div>
       </div>
       <div class="badges">
-        <span class="badge"><b>.NET</b> 9</span>
+        <span class="badge"><b>.NET</b> 10</span>
         <span class="badge"><b>WPF</b> + WPF-UI</span>
         <span class="badge"><b>Octokit</b></span>
-        <span class="badge"><b>CommunityToolkit</b> MVVM &amp; Notifications</span>
+        <span class="badge"><b>CommunityToolkit</b> MVVM</span>
+        <span class="badge"><b>Windows App SDK</b> notifications</span>
         <span class="badge"><b>DPAPI</b> token storage</span>
       </div>
     </div>
