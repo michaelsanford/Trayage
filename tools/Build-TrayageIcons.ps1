@@ -83,6 +83,10 @@ $Geom = @{
     SymCx        = 0.50
     SymCy        = 0.24
     SymR         = 0.155  # nominal radius the symbol fits within
+    # Vertical centroid of the whole composition (top sun-ray tip ~0.07 .. tray base 0.86).
+    # The per-variant Scale (below) grows the glyph about this point so it fills the canvas
+    # without drifting — see New-GlyphBitmap.
+    CompCenterY  = 0.466
 }
 
 function New-RoundedRectPath {
@@ -140,14 +144,17 @@ function Add-Tray {
     try { $G.FillEllipse($shadeBrush, $mX, $mY, $mW, [single](2 * $mRy)) }
     finally { $shadeBrush.Dispose() }
 
-    $inset = $Geom.MouthInset
-    $iW    = [single]($mW * $inset)
-    $iRy   = [single]($mRy * $inset)
-    $iX    = [single]($mX + ($mW - $iW) / 2)
-    $iY    = [single]($topY - $iRy)
-    $frontBrush = [System.Drawing.SolidBrush]::new($Front)
-    try { $G.FillEllipse($frontBrush, $iX, $iY, $iW, [single](2 * $iRy)) }
-    finally { $frontBrush.Dispose() }
+    # Inner lip (depth cue) — only at >=32px; below that it collapses to sub-pixel mush.
+    if ($Size -ge 32) {
+        $inset = $Geom.MouthInset
+        $iW    = [single]($mW * $inset)
+        $iRy   = [single]($mRy * $inset)
+        $iX    = [single]($mX + ($mW - $iW) / 2)
+        $iY    = [single]($topY - $iRy)
+        $frontBrush = [System.Drawing.SolidBrush]::new($Front)
+        try { $G.FillEllipse($frontBrush, $iX, $iY, $iW, [single](2 * $iRy)) }
+        finally { $frontBrush.Dispose() }
+    }
 
     # Upward chevron on the front panel.
     $stroke = [single]([math]::Max(2.0, 0.085 * $Size))
@@ -169,30 +176,35 @@ function Add-Tray {
     finally { $pen.Dispose() }
 }
 
-# Draws a rising sun above the tray (filled core + radiating rays).
+# Draws a rising sun above the tray (filled core + radiating rays). At small sizes the rays
+# turn to mush, so below 32px we drop them and draw a single, larger core disc instead — it
+# still reads as "something has risen above the tray" without the noise.
 function Add-Sun {
     param([System.Drawing.Graphics]$G, [int]$Size, [System.Drawing.Color]$Core, [System.Drawing.Color]$Rays)
     $cx = [single]($Geom.SymCx * $Size)
     $cy = [single]($Geom.SymCy * $Size)
-    $r  = [single](0.075 * $Size)
+    $small = $Size -lt 32
+    $r  = if ($small) { [single](0.15 * $Size) } else { [single](0.11 * $Size) }
 
-    $stroke = [single]([math]::Max(1.5, 0.028 * $Size))
-    $rInner = [single]($r * 1.55)
-    $rOuter = [single]($r * 2.25)
-    $pen = [System.Drawing.Pen]::new($Rays, $stroke)
-    try {
-        $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-        $pen.EndCap   = [System.Drawing.Drawing2D.LineCap]::Round
-        foreach ($deg in 0, 45, 90, 135, 180, 225, 270, 315) {
-            $rad = [single]($deg * [math]::PI / 180)
-            $sx = [single]($cx + $rInner * [math]::Cos($rad))
-            $sy = [single]($cy + $rInner * [math]::Sin($rad))
-            $ex = [single]($cx + $rOuter * [math]::Cos($rad))
-            $ey = [single]($cy + $rOuter * [math]::Sin($rad))
-            $G.DrawLine($pen, $sx, $sy, $ex, $ey)
+    if (-not $small) {
+        $stroke = [single]([math]::Max(1.5, 0.036 * $Size))
+        $rInner = [single]($r * 1.2)
+        $rOuter = [single]($r * 1.5)
+        $pen = [System.Drawing.Pen]::new($Rays, $stroke)
+        try {
+            $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+            $pen.EndCap   = [System.Drawing.Drawing2D.LineCap]::Round
+            foreach ($deg in 0, 45, 90, 135, 180, 225, 270, 315) {
+                $rad = [single]($deg * [math]::PI / 180)
+                $sx = [single]($cx + $rInner * [math]::Cos($rad))
+                $sy = [single]($cy + $rInner * [math]::Sin($rad))
+                $ex = [single]($cx + $rOuter * [math]::Cos($rad))
+                $ey = [single]($cy + $rOuter * [math]::Sin($rad))
+                $G.DrawLine($pen, $sx, $sy, $ex, $ey)
+            }
         }
+        finally { $pen.Dispose() }
     }
-    finally { $pen.Dispose() }
 
     $brush = [System.Drawing.SolidBrush]::new($Core)
     try { $G.FillEllipse($brush, [single]($cx - $r), [single]($cy - $r), [single](2 * $r), [single](2 * $r)) }
@@ -265,6 +277,17 @@ function New-GlyphBitmap {
             finally { $path.Dispose() }
         }
 
+        # Grow the glyph (tray + symbol) about the composition centroid so it fills the
+        # canvas. The tile, drawn above, stays full-bleed. Pen widths scale with the
+        # transform, so strokes get proportionally bolder too.
+        $scale = if ($Variant.ContainsKey('Scale')) { [single]$Variant.Scale } else { [single]1.0 }
+        $st = $g.Save()
+        $cx = [single](0.5 * $Size)
+        $cy = [single]($Geom.CompCenterY * $Size)
+        $g.TranslateTransform($cx, $cy)
+        $g.ScaleTransform($scale, $scale)
+        $g.TranslateTransform([single](-$cx), [single](-$cy))
+
         Add-Tray -G $g -Size $Size -Front $Variant.Front -Shade $Variant.Shade -Chevron $Variant.Chevron
 
         switch ($Variant.Symbol) {
@@ -272,6 +295,8 @@ function New-GlyphBitmap {
             'Question' { Add-Question -G $g -Size $Size -Ink $Variant.SymInk }
             'Cross'    { Add-Cross    -G $g -Size $Size -Ink $Variant.SymInk }
         }
+
+        $g.Restore($st)
     }
     finally { $g.Dispose() }
 
@@ -341,31 +366,34 @@ function Build-Png {
 # ---------------------------------------------------------------------------
 # Icon variants
 # ---------------------------------------------------------------------------
+# Scale grows the glyph about the composition centroid (see New-GlyphBitmap). Tiled
+# variants stay modest (1.08) to keep tile padding; transparent tray icons fill the frame
+# (1.14) since they have no tile to frame them. Tuned so nothing clips at any size.
 $Variants = @{
     # App / OAuth — full brand on the graphite tile (tray + chevron + rising sun).
     App = @{
         Tile = $true; Front = $Color.BlueHi; Shade = $Color.BlueLo; Chevron = $Color.AmberBright
-        Symbol = 'Sun'; SymInk = $Color.Amber; SymCore = $Color.AmberBright
+        Symbol = 'Sun'; SymInk = $Color.Amber; SymCore = $Color.AmberBright; Scale = 1.08
     }
     # Connected, all caught up — plain blue tray, no symbol.
     CaughtUp = @{
         Tile = $false; Front = $Color.BlueHi; Shade = $Color.BlueLo; Chevron = $Color.AmberBright
-        Symbol = 'None'
+        Symbol = 'None'; Scale = 1.14
     }
     # Unread waiting — blue tray + rising sun.
     Unread = @{
         Tile = $false; Front = $Color.BlueHi; Shade = $Color.BlueLo; Chevron = $Color.AmberBright
-        Symbol = 'Sun'; SymInk = $Color.Amber; SymCore = $Color.AmberBright
+        Symbol = 'Sun'; SymInk = $Color.Amber; SymCore = $Color.AmberBright; Scale = 1.14
     }
     # Nothing connected / configured — grey-tinted tray + "?".
     Disconnected = @{
         Tile = $false; Front = $Color.Grey; Shade = $Color.GreyDark; Chevron = $Color.GreySoft
-        Symbol = 'Question'; SymInk = $Color.GreySoft
+        Symbol = 'Question'; SymInk = $Color.GreySoft; Scale = 1.14
     }
     # Configured but unreachable / error — red-tinted tray + "X".
     Error = @{
         Tile = $false; Front = $Color.Signal; Shade = $Color.SignalDark; Chevron = $Color.SignalSoft
-        Symbol = 'Cross'; SymInk = $Color.SignalSoft
+        Symbol = 'Cross'; SymInk = $Color.SignalSoft; Scale = 1.14
     }
 }
 

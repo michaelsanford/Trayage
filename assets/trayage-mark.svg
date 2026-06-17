@@ -17,22 +17,23 @@
     </linearGradient>
   </defs>
   <rect x="0.5" y="0.5" width="31" height="31" rx="7" fill="url(#tile)" stroke="#343d4d" stroke-width="1"/>
-  <!-- Inbox tray: lit front panel + shaded opening + inner lip. -->
-  <polygon points="5.12,16 26.88,16 24.64,27.52 7.36,27.52" fill="#5b97f7"/>
-  <ellipse cx="16" cy="16" rx="10.88" ry="2.72" fill="#2f63c8"/>
-  <ellipse cx="16" cy="16" rx="8.49" ry="2.12" fill="#5b97f7"/>
+  <!-- Inbox tray: lit front panel + shaded opening + inner lip. Glyph enlarged 1.08x about
+       the composition centroid (16, 14.9) to match the regenerated raster assets. -->
+  <polygon points="4.25,16.09 27.75,16.09 25.33,28.53 6.67,28.53" fill="#5b97f7"/>
+  <ellipse cx="16" cy="16.09" rx="11.75" ry="2.94" fill="#2f63c8"/>
+  <ellipse cx="16" cy="16.09" rx="9.17" ry="2.29" fill="#5b97f7"/>
   <!-- Upward chevron. -->
-  <polyline points="12.32,23.36 16,19.84 19.68,23.36" fill="none" stroke="#ffd587" stroke-width="2.72" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="12.03,24.04 16,20.24 19.97,24.04" fill="none" stroke="#ffd587" stroke-width="2.94" stroke-linecap="round" stroke-linejoin="round"/>
   <!-- Rising sun. -->
-  <g stroke="#f1b24a" stroke-width="0.9" stroke-linecap="round">
-    <line x1="19.72" y1="7.68" x2="21.40" y2="7.68"/>
-    <line x1="18.63" y1="10.31" x2="19.82" y2="11.50"/>
-    <line x1="16" y1="11.40" x2="16" y2="13.08"/>
-    <line x1="13.37" y1="10.31" x2="12.18" y2="11.50"/>
-    <line x1="12.28" y1="7.68" x2="10.60" y2="7.68"/>
-    <line x1="13.37" y1="5.05" x2="12.18" y2="3.86"/>
-    <line x1="16" y1="3.96" x2="16" y2="2.28"/>
-    <line x1="18.63" y1="5.05" x2="19.82" y2="3.86"/>
+  <g stroke="#f1b24a" stroke-width="1.24" stroke-linecap="round">
+    <line x1="20.56" y1="7.1" x2="21.7" y2="7.1"/>
+    <line x1="19.23" y1="10.33" x2="20.03" y2="11.13"/>
+    <line x1="16" y1="11.66" x2="16" y2="12.81"/>
+    <line x1="12.77" y1="10.33" x2="11.97" y2="11.13"/>
+    <line x1="11.44" y1="7.1" x2="10.3" y2="7.1"/>
+    <line x1="12.77" y1="3.88" x2="11.97" y2="3.07"/>
+    <line x1="16" y1="2.54" x2="16" y2="1.4"/>
+    <line x1="19.23" y1="3.88" x2="20.03" y2="3.07"/>
   </g>
-  <circle cx="16" cy="7.68" r="2.4" fill="#ffd587"/>
+  <circle cx="16" cy="7.1" r="3.8" fill="#ffd587"/>
 </svg>
