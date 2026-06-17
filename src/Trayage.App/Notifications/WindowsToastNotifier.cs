@@ -27,9 +27,11 @@ public sealed class WindowsToastNotifier : IToastNotifier
 
     public WindowsToastNotifier(ILogger<WindowsToastNotifier> logger) => _logger = logger;
 
+    public bool IsAvailable => AppNotificationManager.IsSupported();
+
     public void Show(InboxItem item)
     {
-        if (!AppNotificationManager.IsSupported())
+        if (!IsAvailable)
         {
             _logger.LogDebug("App notifications aren't supported on this system; skipping toast.");
             return;

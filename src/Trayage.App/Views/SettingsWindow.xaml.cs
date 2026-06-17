@@ -15,6 +15,9 @@ public partial class SettingsWindow : FluentWindow
     /// <summary>Brings the window to the front, restoring it if minimised or hidden.</summary>
     public void ShowAndActivate()
     {
+        // Re-check toast availability in case the runtime was installed since last shown.
+        (DataContext as SettingsViewModel)?.RefreshNotificationAvailability();
+
         Show();
         if (WindowState == System.Windows.WindowState.Minimized)
         {
