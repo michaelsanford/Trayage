@@ -26,8 +26,8 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="CommunityToolkit.WinUI.Notifications" Version="7.1.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <PackageReference Include="WPF-UI.Tray" Version="4.3.0" />
   </ItemGroup>
@@ -36,6 +36,18 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+
+    <!-- Windows App SDK in an unpackaged (no MSIX) app. Self-contain the WinAppSDK
+         runtime only when publishing for a RID, so the shipped zip stays install-free;
+         a plain RID-less `dotnet build` (CI build/test) remains framework-dependent. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained Condition="'$(RuntimeIdentifier)' != ''">true</WindowsAppSDKSelfContained>
+
+    <!-- MVVMTK0045 warns that [ObservableProperty] on a field isn't AOT-safe in WinRT XAML
+         (UWP/WinUI 3) apps. It fires only because the Windows App SDK brings in CsWinRT, but
+         Trayage is a WPF app (WPF binding never uses that marshalling) and isn't NativeAOT, so
+         the warning doesn't apply here. -->
+    <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

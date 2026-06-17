@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Trayage.App.Services;
 using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
+using Trayage.Core.Notifications;
 using Trayage.Core.Providers;
 using Trayage.Core.Providers.Bitbucket;
 using Trayage.Core.Providers.GitHub;
@@ -21,10 +22,14 @@ public sealed record PollIntervalOption(string Label, int Seconds);
 /// </summary>
 public sealed partial class SettingsViewModel : ObservableObject
 {
+    // Official Windows App Runtime download page (the runtime that backs Windows toasts).
+    private const string NotificationRuntimeDownloadUrl = "https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads";
+
     private readonly ISettingsStore _settings;
     private readonly GitHubProvider _gitHub;
     private readonly BitbucketProvider _bitbucket;
     private readonly InboxService _inboxService;
+    private readonly IToastNotifier _notifier;
     private bool _loading;
 
     [ObservableProperty] private bool _notifyReviewRequests;
@@ -52,18 +57,34 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private string _newWatchedRepo = string.Empty;
 
-    public SettingsViewModel(ISettingsStore settings, GitHubProvider gitHub, BitbucketProvider bitbucket, InboxService inboxService)
+    public SettingsViewModel(ISettingsStore settings, GitHubProvider gitHub, BitbucketProvider bitbucket, InboxService inboxService, IToastNotifier notifier)
     {
         _settings = settings;
         _gitHub = gitHub;
         _bitbucket = bitbucket;
         _inboxService = inboxService;
+        _notifier = notifier;
 
         Load();
     }
 
     /// <summary>Raised when an inbox display option (grouping / show-read) changes.</summary>
     public event Action? InboxDisplayChanged;
+
+    /// <summary>
+    /// True when Windows can't deliver toasts on this PC (the Windows App Runtime is
+    /// missing). The Notifications pane surfaces a warning and an install link when set.
+    /// </summary>
+    public bool ToastsUnavailable => !_notifier.IsAvailable;
+
+    /// <summary>
+    /// Re-checks toast availability. Called when the window is shown so installing the
+    /// runtime and reopening Settings clears the warning without an app restart.
+    /// </summary>
+    public void RefreshNotificationAvailability() => OnPropertyChanged(nameof(ToastsUnavailable));
+
+    [RelayCommand]
+    private static void OpenNotificationRuntimeHelp() => InboxViewModel.OpenUrl(NotificationRuntimeDownloadUrl);
 
     public ObservableCollection<string> WatchedRepositories { get; } = new();
 

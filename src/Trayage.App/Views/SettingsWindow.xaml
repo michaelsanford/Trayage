@@ -113,6 +113,21 @@
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Margin="0,0,0,16" />
 
+                        <!-- Shown only when the OS can't deliver toasts (Windows App Runtime missing).
+                             Trayage still tracks the inbox in the tray; this offers the one-click fix. -->
+                        <StackPanel Margin="0,0,0,16"
+                                    Visibility="{Binding ToastsUnavailable, Converter={StaticResource BoolToVisibility}}">
+                            <ui:InfoBar Severity="Warning"
+                                        IsOpen="True"
+                                        IsClosable="False"
+                                        Title="Notifications unavailable"
+                                        Message="Windows toasts need the Windows App Runtime, which isn't installed on this PC. Trayage still tracks your inbox from the tray — install the runtime to turn on pop-up notifications, then reopen Settings." />
+                            <ui:Button Content="Get the Windows App Runtime"
+                                       Icon="{ui:SymbolIcon ArrowDownload24}"
+                                       Margin="0,8,0,0"
+                                       Command="{Binding OpenNotificationRuntimeHelpCommand}" />
+                        </StackPanel>
+
                         <ui:ToggleSwitch Content="Review requests"
                                          IsChecked="{Binding NotifyReviewRequests}"
                                          Margin="0,0,0,10" />

@@ -1,7 +1,6 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
-using CommunityToolkit.WinUI.Notifications;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -14,6 +13,8 @@ using Trayage.App.ViewModels;
 using Trayage.App.Views;
 using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
+using Microsoft.Windows.AppLifecycle;
+using Microsoft.Windows.AppNotifications;
 
 namespace Trayage.App;
 
@@ -30,6 +31,7 @@ public partial class App : Application
     private IHost? _host;
     private TrayIconService? _tray;
     private Window? _trayHost;
+    private bool _notificationsRegistered;
 
     /// <summary>True once the user has chosen Quit, so windows stop hiding and actually close.</summary>
     public static bool IsShuttingDown { get; private set; }
@@ -43,9 +45,12 @@ public partial class App : Application
         _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out bool createdNew);
         if (!createdNew)
         {
-            // A toast click while the app is already running is routed to the live
-            // instance via COM, so a second launch can exit silently.
-            if (!ToastNotificationManagerCompat.WasCurrentProcessToastActivated())
+            // Another instance owns the tray. When the app is already running a toast click is
+            // delivered in-process to that instance (see OnNotificationInvoked), so this second
+            // process exits quietly; only a manual relaunch shows the reminder. It must NOT call
+            // AppNotificationManager.Register(), which would steal the COM activator from the
+            // running instance.
+            if (AppInstance.GetCurrent().GetActivatedEventArgs()?.Kind != ExtendedActivationKind.AppNotification)
             {
                 MessageBox.Show("Trayage is already running. Look for its icon in the system tray.",
                     "Trayage", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -55,8 +60,22 @@ public partial class App : Application
             return;
         }
 
-        // Open the page behind a toast when the user clicks it.
-        ToastNotificationManagerCompat.OnActivated += OnToastActivated;
+        // Open the page behind a toast when the user clicks it. The handler must be registered
+        // before Register() so a click arrives in-process instead of launching a new instance.
+        // Guarded by IsSupported(): app notifications need the Windows App SDK Singleton package,
+        // which isn't part of a self-contained deployment — light them up only when available.
+        if (AppNotificationManager.IsSupported())
+        {
+            AppNotificationManager.Default.NotificationInvoked += OnNotificationInvoked;
+            AppNotificationManager.Default.Register();
+            _notificationsRegistered = true;
+
+            // If this instance was cold-launched by a toast click, open its page now.
+            if (AppInstance.GetCurrent().GetActivatedEventArgs() is { Kind: ExtendedActivationKind.AppNotification } activation)
+            {
+                OpenToastUrl((AppNotificationActivatedEventArgs)activation.Data);
+            }
+        }
 
         // Tray-only: never quit just because no window is open.
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -121,6 +140,13 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        // Only the primary instance registered, so only it unregisters — a second instance
+        // calling Unregister() would tear down the running instance's COM activator.
+        if (_notificationsRegistered)
+        {
+            AppNotificationManager.Default.Unregister();
+        }
+
         _tray?.Unregister();
 
         if (_host is not null)
@@ -140,6 +166,9 @@ public partial class App : Application
         tray.OpenInboxRequested += ShowInboxFlyout;
         tray.RefreshRequested += RefreshInbox;
         tray.SettingsRequested += ShowSettings;
+#if DEBUG
+        tray.InjectRequested += InjectItem;
+#endif
 
         var inboxViewModel = _host!.Services.GetRequiredService<InboxViewModel>();
         inboxViewModel.OpenSettingsRequested += ShowSettings;
@@ -260,16 +289,59 @@ public partial class App : Application
     private void ShowSettings() =>
         _host!.Services.GetRequiredService<SettingsWindow>().ShowAndActivate();
 
-    private static void OnToastActivated(ToastNotificationActivatedEventArgsCompat e)
+    private void OnNotificationInvoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)
+        => OpenToastUrl(args);
+
+    private static void OpenToastUrl(AppNotificationActivatedEventArgs args)
     {
-        var arguments = ToastArguments.Parse(e.Argument);
-        if (arguments.Contains(WindowsToastNotifier.UrlArgumentKey))
+        if (args.Arguments.TryGetValue(WindowsToastNotifier.UrlArgumentKey, out var url) && !string.IsNullOrEmpty(url))
         {
-            var url = arguments[WindowsToastNotifier.UrlArgumentKey];
-            if (!string.IsNullOrEmpty(url))
-            {
-                InboxViewModel.OpenUrl(url);
-            }
+            InboxViewModel.OpenUrl(url);
         }
     }
+
+#if DEBUG
+    // Debug-only developer aid, compiled out of Release/shipping builds. Wired to the tray
+    // "Inject ▸ <provider> ▸ <kind>" menu in WireTray; see TrayIconService for the entries.
+    //
+    // Injects a synthetic item for the chosen provider/kind into the live stream — it lands
+    // in InboxState (so the flyout + tray update immediately) and runs through the real
+    // NotificationRuleEngine + notifier, exactly as the poller does, so you can see how the
+    // pipeline responds to your current settings. The next poll overwrites the snapshot with
+    // real provider data, so the injected item is transient.
+    private void InjectItem(Trayage.Core.Models.ProviderKind provider, Trayage.Core.Models.InboxItemKind kind)
+    {
+        var item = SampleItem(provider, kind);
+
+        var state = _host!.Services.GetRequiredService<InboxState>();
+        var settings = _host.Services.GetRequiredService<ISettingsStore>().Load();
+        var rules = _host.Services.GetRequiredService<Trayage.Core.Notifications.NotificationRuleEngine>();
+        var notifier = _host.Services.GetRequiredService<Trayage.Core.Notifications.IToastNotifier>();
+
+        state.Set(new List<Trayage.Core.Models.InboxItem>(state.Items) { item });
+
+        foreach (var notifiable in rules.SelectNotifiable(new[] { item }, settings.Notifications, settings.WatchedRepositories))
+        {
+            notifier.Show(notifiable);
+        }
+    }
+
+    private static Trayage.Core.Models.InboxItem SampleItem(Trayage.Core.Models.ProviderKind provider, Trayage.Core.Models.InboxItemKind kind)
+    {
+        var webUrl = provider == Trayage.Core.Models.ProviderKind.Bitbucket
+            ? "https://bitbucket.org/michaelsanford/trayage/pull-requests/1"
+            : "https://github.com/michaelsanford/Trayage/pull/1";
+
+        return new()
+        {
+            Id = $"debug-{provider}-{kind}-{DateTimeOffset.UtcNow.Ticks}",
+            Provider = provider,
+            Kind = kind,
+            Title = $"[debug] {provider} {kind} — click me",
+            RepositoryFullName = "michaelsanford/Trayage",
+            WebUrl = webUrl,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+    }
+#endif
 }
