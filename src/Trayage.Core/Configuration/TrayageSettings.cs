@@ -20,6 +20,9 @@ public sealed class NotificationSettings
     public bool CiStatus { get; set; }
     public bool WatchedRepoActivity { get; set; } = true;
 
+    /// <summary>Activity on issues/PRs you authored or are participating in.</summary>
+    public bool Participating { get; set; } = true;
+
     /// <summary>Maps an item kind to its corresponding per-class toggle.</summary>
     public bool IsKindEnabled(InboxItemKind kind) => kind switch
     {
@@ -28,6 +31,7 @@ public sealed class NotificationSettings
         InboxItemKind.Assignment => MentionsAndAssignments,
         InboxItemKind.CiStatus => CiStatus,
         InboxItemKind.RepoActivity => WatchedRepoActivity,
+        InboxItemKind.Participating => Participating,
         _ => false,
     };
 }
@@ -65,6 +69,14 @@ public sealed class TrayageSettings
     /// <summary>When true, the inbox flyout shows read items (de-emphasised); otherwise only unread items appear.</summary>
     public bool ShowReadItems { get; set; } = true;
 
+    /// <summary>
+    /// When true, a read item is still surfaced in the list and eligible for a toast if it was updated
+    /// within ~2× the poll interval. Bridges GitHub's web-vs-REST read-state desync (a thread the web
+    /// "bell" still shows as new can already read <c>unread:false</c> over the REST API Trayage uses).
+    /// When false, read items behave as before.
+    /// </summary>
+    public bool SurfaceRecentlyModified { get; set; } = true;
+
     public NotificationSettings Notifications { get; set; } = new();
 
     /// <summary>"owner/repo" names to surface and toast on for all activity.</summary>
@@ -87,12 +99,14 @@ public sealed class TrayageSettings
         VerboseLogging = VerboseLogging,
         GroupByRepository = GroupByRepository,
         ShowReadItems = ShowReadItems,
+        SurfaceRecentlyModified = SurfaceRecentlyModified,
         Notifications = new NotificationSettings
         {
             ReviewRequests = Notifications.ReviewRequests,
             MentionsAndAssignments = Notifications.MentionsAndAssignments,
             CiStatus = Notifications.CiStatus,
             WatchedRepoActivity = Notifications.WatchedRepoActivity,
+            Participating = Notifications.Participating,
         },
         WatchedRepositories = new List<string>(WatchedRepositories),
         GitHub = new ProviderConnectionState { Connected = GitHub.Connected, AccountLogin = GitHub.AccountLogin },

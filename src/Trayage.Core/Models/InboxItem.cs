@@ -27,6 +27,9 @@ public enum InboxItemKind
 
     /// <summary>Any activity on a repository the user has explicitly chosen to watch.</summary>
     RepoActivity,
+
+    /// <summary>Activity on an issue or PR you authored or are participating in.</summary>
+    Participating,
 }
 
 /// <summary>

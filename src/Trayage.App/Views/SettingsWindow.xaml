@@ -140,6 +140,9 @@
                         <ui:ToggleSwitch Content="All activity on watched repositories"
                                          IsChecked="{Binding NotifyWatchedRepoActivity}"
                                          Margin="0,0,0,10" />
+                        <ui:ToggleSwitch Content="Issues &amp; PRs I'm involved in"
+                                         IsChecked="{Binding NotifyParticipating}"
+                                         Margin="0,0,0,10" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -237,6 +240,18 @@
                                 </StackPanel>
                             </ui:CardControl.Header>
                             <ui:ToggleSwitch IsChecked="{Binding ShowReadItems}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Margin="0,0,0,12">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Surface recently-modified items" FontWeight="SemiBold" />
+                                    <TextBlock Text="Show and notify on recently-updated items even if GitHub already marks them read (within ~2× the poll interval)."
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding SurfaceRecentlyModified}" />
                         </ui:CardControl>
 
                         <ui:CardControl Margin="0,0,0,12">

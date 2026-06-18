@@ -11,9 +11,11 @@ public static class GitHubReasonMapper
         "mention" or "team_mention" => InboxItemKind.Mention,
         "assign" => InboxItemKind.Assignment,
         "ci_activity" => InboxItemKind.CiStatus,
-        // author, comment, subscribed, state_change, manual, security_alert, … — these
-        // are general involvement; treated as repo activity and only toasted for repos
-        // the user has explicitly chosen to watch (see the notification rule engine).
+        // Threads you authored or are taking part in: notified by default, independent of
+        // the watched-repo list (see the notification rule engine).
+        "author" or "comment" or "state_change" or "manual" => InboxItemKind.Participating,
+        // subscribed, security_alert, … — whole-repo / general involvement; treated as repo
+        // activity and only toasted for repos the user has explicitly chosen to watch.
         _ => InboxItemKind.RepoActivity,
     };
 }

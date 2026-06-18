@@ -320,7 +320,7 @@ public partial class App : Application
 
         state.Set(new List<Trayage.Core.Models.InboxItem>(state.Items) { item });
 
-        foreach (var notifiable in rules.SelectNotifiable(new[] { item }, settings.Notifications, settings.WatchedRepositories))
+        foreach (var notifiable in rules.SelectNotifiable(new[] { item }, settings.Notifications, settings.WatchedRepositories, DateTimeOffset.UtcNow, InboxRecency.WindowFor(settings)))
         {
             notifier.Show(notifiable);
         }

@@ -87,7 +87,12 @@ public sealed class InboxPollingService : BackgroundService
         if (newItems.Count > 0)
         {
             var settings = _settings.Load();
-            var toNotify = _ruleEngine.SelectNotifiable(newItems, settings.Notifications, settings.WatchedRepositories);
+            var toNotify = _ruleEngine.SelectNotifiable(
+                newItems,
+                settings.Notifications,
+                settings.WatchedRepositories,
+                DateTimeOffset.UtcNow,
+                InboxRecency.WindowFor(settings));
             foreach (var item in toNotify)
             {
                 _notifier.Show(item);

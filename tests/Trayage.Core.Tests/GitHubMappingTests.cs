@@ -11,8 +11,12 @@ public sealed class GitHubMappingTests
     [InlineData("team_mention", InboxItemKind.Mention)]
     [InlineData("assign", InboxItemKind.Assignment)]
     [InlineData("ci_activity", InboxItemKind.CiStatus)]
-    [InlineData("author", InboxItemKind.RepoActivity)]
+    [InlineData("author", InboxItemKind.Participating)]
+    [InlineData("comment", InboxItemKind.Participating)]
+    [InlineData("state_change", InboxItemKind.Participating)]
+    [InlineData("manual", InboxItemKind.Participating)]
     [InlineData("subscribed", InboxItemKind.RepoActivity)]
+    [InlineData("security_alert", InboxItemKind.RepoActivity)]
     [InlineData(null, InboxItemKind.RepoActivity)]
     public void ToKind_MapsReasons(string? reason, InboxItemKind expected)
     {

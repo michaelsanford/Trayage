@@ -36,6 +36,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _notifyMentions;
     [ObservableProperty] private bool _notifyCi;
     [ObservableProperty] private bool _notifyWatchedRepoActivity;
+    [ObservableProperty] private bool _notifyParticipating;
 
     [ObservableProperty] private int _pollIntervalSeconds;
     [ObservableProperty] private bool _startWithWindows;
@@ -43,6 +44,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _verboseLogging;
     [ObservableProperty] private bool _groupByRepository;
     [ObservableProperty] private bool _showReadItems;
+    [ObservableProperty] private bool _surfaceRecentlyModified;
 
     [ObservableProperty] private bool _gitHubConnected;
     [ObservableProperty] private string _gitHubAccountLabel = "Not connected";
@@ -253,6 +255,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnNotifyWatchedRepoActivityChanged(bool value) => Persist();
 
+    partial void OnNotifyParticipatingChanged(bool value) => Persist();
+
     [RelayCommand]
     private static void OpenLogs()
     {
@@ -282,6 +286,17 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     partial void OnShowReadItemsChanged(bool value)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        Persist();
+        InboxDisplayChanged?.Invoke();
+    }
+
+    partial void OnSurfaceRecentlyModifiedChanged(bool value)
     {
         if (_loading)
         {
@@ -323,6 +338,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         NotifyMentions = s.Notifications.MentionsAndAssignments;
         NotifyCi = s.Notifications.CiStatus;
         NotifyWatchedRepoActivity = s.Notifications.WatchedRepoActivity;
+        NotifyParticipating = s.Notifications.Participating;
 
         // Snap a previously-saved cadence that's no longer offered to the nearest option,
         // so the dropdown always shows a valid selection. The On…Changed persist is
@@ -338,6 +354,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         VerboseLogging = s.VerboseLogging;
         GroupByRepository = s.GroupByRepository;
         ShowReadItems = s.ShowReadItems;
+        SurfaceRecentlyModified = s.SurfaceRecentlyModified;
         StartWithWindows = AutostartManager.IsEnabled();
 
         WatchedRepositories.Clear();
@@ -373,11 +390,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.VerboseLogging = VerboseLogging;
         s.GroupByRepository = GroupByRepository;
         s.ShowReadItems = ShowReadItems;
+        s.SurfaceRecentlyModified = SurfaceRecentlyModified;
         s.StartWithWindows = StartWithWindows;
         s.Notifications.ReviewRequests = NotifyReviewRequests;
         s.Notifications.MentionsAndAssignments = NotifyMentions;
         s.Notifications.CiStatus = NotifyCi;
         s.Notifications.WatchedRepoActivity = NotifyWatchedRepoActivity;
+        s.Notifications.Participating = NotifyParticipating;
         s.WatchedRepositories = WatchedRepositories.ToList();
         _settings.Save(s);
     }

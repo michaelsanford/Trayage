@@ -17,7 +17,35 @@ public sealed class JsonSettingsStoreTests : IDisposable
 
         Assert.Equal(300, settings.PollIntervalSeconds);
         Assert.True(settings.Notifications.ReviewRequests);
+        Assert.True(settings.Notifications.Participating);
+        Assert.True(settings.SurfaceRecentlyModified);
         Assert.Empty(settings.WatchedRepositories);
+    }
+
+    [Fact]
+    public void Load_WhenNewFlagsAbsentFromJson_DefaultsToOn()
+    {
+        // Settings files written before these flags existed must opt the user in.
+        File.WriteAllText(_path, "{\"PollIntervalSeconds\":120}");
+
+        var settings = NewStore().Load();
+
+        Assert.True(settings.SurfaceRecentlyModified);
+        Assert.True(settings.Notifications.Participating);
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsNewFlags()
+    {
+        var store = NewStore();
+        var saved = new TrayageSettings { SurfaceRecentlyModified = false };
+        saved.Notifications.Participating = false;
+
+        store.Save(saved);
+        var loaded = store.Load();
+
+        Assert.False(loaded.SurfaceRecentlyModified);
+        Assert.False(loaded.Notifications.Participating);
     }
 
     [Fact]
@@ -129,6 +157,9 @@ public sealed class JsonSettingsStoreTests : IDisposable
         Assert.True(n.IsKindEnabled(InboxItemKind.ReviewRequest));
         Assert.True(n.IsKindEnabled(InboxItemKind.Assignment));
         Assert.False(n.IsKindEnabled(InboxItemKind.CiStatus));
+        Assert.True(n.IsKindEnabled(InboxItemKind.Participating));
+
+        Assert.False(new NotificationSettings { Participating = false }.IsKindEnabled(InboxItemKind.Participating));
     }
 
     public void Dispose()

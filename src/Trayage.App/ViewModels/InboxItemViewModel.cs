@@ -39,6 +39,7 @@ public sealed class InboxItemViewModel
         InboxItemKind.Assignment => "Assigned",
         InboxItemKind.CiStatus => "CI status",
         InboxItemKind.RepoActivity => "Activity",
+        InboxItemKind.Participating => "Participating",
         _ => Item.Kind.ToString(),
     };
 
@@ -50,6 +51,7 @@ public sealed class InboxItemViewModel
         InboxItemKind.Assignment => SymbolRegular.PersonTag24,
         InboxItemKind.CiStatus => SymbolRegular.CheckmarkCircle24,
         InboxItemKind.RepoActivity => SymbolRegular.Eye24,
+        InboxItemKind.Participating => SymbolRegular.Comment24,
         _ => SymbolRegular.Circle24,
     };
 
