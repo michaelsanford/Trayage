@@ -63,6 +63,7 @@ public sealed class WindowsToastNotifier : IToastNotifier
         InboxItemKind.Assignment => "Assigned to you",
         InboxItemKind.CiStatus => "CI status changed",
         InboxItemKind.RepoActivity => "New activity",
+        InboxItemKind.Participating => "New activity on your thread",
         _ => "Trayage",
     };
 }

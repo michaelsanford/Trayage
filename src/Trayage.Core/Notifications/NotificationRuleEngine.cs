@@ -1,4 +1,5 @@
 using Trayage.Core.Configuration;
+using Trayage.Core.Inbox;
 using Trayage.Core.Models;
 
 namespace Trayage.Core.Notifications;
@@ -12,21 +13,30 @@ public sealed class NotificationRuleEngine
     public IReadOnlyList<InboxItem> SelectNotifiable(
         IEnumerable<InboxItem> newItems,
         NotificationSettings settings,
-        IReadOnlyCollection<string> watchedRepositories)
+        IReadOnlyCollection<string> watchedRepositories,
+        DateTimeOffset now,
+        TimeSpan? recencyWindow)
     {
         ArgumentNullException.ThrowIfNull(newItems);
         ArgumentNullException.ThrowIfNull(settings);
 
         var watched = new HashSet<string>(watchedRepositories ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
 
-        return newItems.Where(item => ShouldNotify(item, settings, watched)).ToList();
+        return newItems.Where(item => ShouldNotify(item, settings, watched, now, recencyWindow)).ToList();
     }
 
-    private static bool ShouldNotify(InboxItem item, NotificationSettings settings, HashSet<string> watched)
+    private static bool ShouldNotify(
+        InboxItem item,
+        NotificationSettings settings,
+        HashSet<string> watched,
+        DateTimeOffset now,
+        TimeSpan? recencyWindow)
     {
         // Only unread activity is worth a toast — the inbox also carries already-read items
-        // so the flyout can mirror the full notifications feed.
-        if (!item.IsUnread)
+        // so the flyout can mirror the full notifications feed. A read item is still eligible
+        // when it was updated within the recency window (bridges GitHub's web-vs-REST read-state
+        // desync); this relaxes the read gate only, not the kind/watched-repo rules below.
+        if (!item.IsUnread && !InboxRecency.IsRecent(item, now, recencyWindow))
         {
             return false;
         }

@@ -111,6 +111,8 @@ public sealed partial class InboxViewModel : ObservableObject
         var settings = _settings.Load();
         var groupByRepo = settings.GroupByRepository;
         var includeRepo = !groupByRepo;
+        var now = DateTimeOffset.UtcNow;
+        var recencyWindow = InboxRecency.WindowFor(settings);
 
         // Index the current wrappers so unchanged items keep their existing instance
         // (no allocation, no rebind) and only genuinely changed slots fire collection events.
@@ -123,7 +125,10 @@ public sealed partial class InboxViewModel : ObservableObject
         var target = new List<InboxItemViewModel>(Items.Count);
         foreach (var item in _state.Items)
         {
-            if (!settings.ShowReadItems && !item.IsUnread)
+            // Hide read items unless the user opted to show them — but always keep a read item
+            // that was updated recently, so a thread GitHub's REST API marks read (while the web
+            // bell still flags it new) doesn't silently vanish from the list.
+            if (!settings.ShowReadItems && !item.IsUnread && !InboxRecency.IsRecent(item, now, recencyWindow))
             {
                 continue;
             }
