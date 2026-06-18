@@ -1,4 +1,7 @@
-# Trayage
+<div align="center">
+  <img src="docs/trayage.png" alt="Trayage" width="128" height="128">
+  <h1>Trayage</h1>
+</div>
 
 [![CI](https://github.com/michaelsanford/Trayage/actions/workflows/ci.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/ci.yml)
 [![PowerShell Lint](https://github.com/michaelsanford/Trayage/actions/workflows/powershell.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/powershell.yml)
