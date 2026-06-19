@@ -72,7 +72,9 @@ public sealed class InboxPollingService : BackgroundService
         }
     }
 
-    private async Task PollOnceAsync(CancellationToken cancellationToken)
+    // internal (not private) so the orchestration logic can be unit-tested directly,
+    // sidestepping the ≥30s delay in the ExecuteAsync loop. See InternalsVisibleTo in the .csproj.
+    internal async Task PollOnceAsync(CancellationToken cancellationToken)
     {
         var current = await _inboxService.RefreshAsync(cancellationToken).ConfigureAwait(false);
 
@@ -107,7 +109,7 @@ public sealed class InboxPollingService : BackgroundService
         _previous = current;
     }
 
-    private TimeSpan NextInterval()
+    internal TimeSpan NextInterval()
     {
         var configured = TimeSpan.FromSeconds(Math.Max(_settings.Load().PollIntervalSeconds, 1));
 
