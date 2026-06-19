@@ -74,6 +74,23 @@ public sealed class FileLoggerProvider : ILoggerProvider
             {
                 try
                 {
+                    if (File.Exists(_filePath) && new FileInfo(_filePath).Length > 10 * 1024 * 1024)
+                    {
+                        var backupPath = _filePath + ".1";
+                        try
+                        {
+                            if (File.Exists(backupPath))
+                            {
+                                File.Delete(backupPath);
+                            }
+                            File.Move(_filePath, backupPath);
+                        }
+                        catch (IOException)
+                        {
+                            // If rotation fails (e.g. file is locked), just write to the original file
+                        }
+                    }
+
                     File.AppendAllText(_filePath, line);
                 }
                 catch (IOException)

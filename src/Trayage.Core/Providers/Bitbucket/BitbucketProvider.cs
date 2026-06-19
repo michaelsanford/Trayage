@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Trayage.Core.Configuration;
@@ -163,43 +164,67 @@ public sealed class BitbucketProvider : IInboxProvider
             return Array.Empty<InboxItem>();
         }
 
-        // Highest-priority kind wins when the same PR appears via multiple queries.
-        var byId = new Dictionary<string, InboxItem>(StringComparer.Ordinal);
+        var tasks = new List<Task<List<InboxItem>>>();
+        tasks.Add(GetAuthoredAsync(uuid, cancellationToken));
 
-        await AddAuthoredAsync(uuid, byId, cancellationToken).ConfigureAwait(false);
-
+        // Limit concurrent HTTP queries using a semaphore. 4 is a safe compromise between speed and rate limits.
+        using var semaphore = new SemaphoreSlim(4);
         foreach (var repo in query.WatchedRepositories)
         {
-            await AddWatchedRepoAsync(repo, uuid, byId, cancellationToken).ConfigureAwait(false);
+            tasks.Add(GetWatchedRepoAsync(repo, uuid, semaphore, cancellationToken));
+        }
+
+        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+
+        // Highest-priority kind wins when the same PR appears via multiple queries.
+        var byId = new Dictionary<string, InboxItem>(StringComparer.Ordinal);
+        foreach (var result in results)
+        {
+            foreach (var item in result)
+            {
+                Upsert(byId, item);
+            }
         }
 
         return byId.Values.ToList();
     }
 
-    private async Task AddAuthoredAsync(string uuid, Dictionary<string, InboxItem> byId, CancellationToken ct)
+    private async Task<List<InboxItem>> GetAuthoredAsync(string uuid, CancellationToken ct)
     {
         var url = $"{ApiBase}/pullrequests/{Uri.EscapeDataString(uuid)}?state=OPEN";
         var prs = await GetAllPullRequestsAsync(url, ct).ConfigureAwait(false);
+        var list = new List<InboxItem>(prs.Count);
         foreach (var pr in prs)
         {
-            Upsert(byId, BitbucketMapping.ToInboxItem(pr, InboxItemKind.Assignment, string.Empty));
+            list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.Assignment, string.Empty));
         }
+        return list;
     }
 
-    private async Task AddWatchedRepoAsync(string repo, string uuid, Dictionary<string, InboxItem> byId, CancellationToken ct)
+    private async Task<List<InboxItem>> GetWatchedRepoAsync(string repo, string uuid, SemaphoreSlim semaphore, CancellationToken ct)
     {
-        // Review requests (more specific) first, then general activity.
-        var reviewerQuery = Uri.EscapeDataString($"reviewers.uuid=\"{uuid}\"");
-        var reviewerUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN&q={reviewerQuery}";
-        foreach (var pr in await GetAllPullRequestsAsync(reviewerUrl, ct).ConfigureAwait(false))
+        await semaphore.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            Upsert(byId, BitbucketMapping.ToInboxItem(pr, InboxItemKind.ReviewRequest, repo));
-        }
+            var list = new List<InboxItem>();
+            // Review requests (more specific) first, then general activity.
+            var reviewerQuery = Uri.EscapeDataString($"reviewers.uuid=\"{uuid}\"");
+            var reviewerUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN&q={reviewerQuery}";
+            foreach (var pr in await GetAllPullRequestsAsync(reviewerUrl, ct).ConfigureAwait(false))
+            {
+                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.ReviewRequest, repo));
+            }
 
-        var allUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN";
-        foreach (var pr in await GetAllPullRequestsAsync(allUrl, ct).ConfigureAwait(false))
+            var allUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN";
+            foreach (var pr in await GetAllPullRequestsAsync(allUrl, ct).ConfigureAwait(false))
+            {
+                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.RepoActivity, repo));
+            }
+            return list;
+        }
+        finally
         {
-            Upsert(byId, BitbucketMapping.ToInboxItem(pr, InboxItemKind.RepoActivity, repo));
+            semaphore.Release();
         }
     }
 

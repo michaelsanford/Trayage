@@ -38,7 +38,7 @@ public static class AutostartManager
     }
 
     private static string ExecutablePath =>
-        Process.GetCurrentProcess().MainModule?.FileName
-        ?? Environment.ProcessPath
+        Environment.ProcessPath
+        ?? Process.GetCurrentProcess().MainModule?.FileName
         ?? string.Empty;
 }
