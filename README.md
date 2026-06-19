@@ -4,6 +4,7 @@
 </div>
 
 [![CI](https://github.com/michaelsanford/Trayage/actions/workflows/ci.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-report-blue)](https://github.com/michaelsanford/Trayage/actions/workflows/ci.yml)
 [![PowerShell Lint](https://github.com/michaelsanford/Trayage/actions/workflows/powershell.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/powershell.yml)
 [![CodeQL](https://github.com/michaelsanford/Trayage/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/github-code-scanning/codeql)
 [![Release](https://github.com/michaelsanford/Trayage/actions/workflows/release.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/release.yml)

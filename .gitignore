@@ -38,6 +38,7 @@ _ReSharper*/
 
 # .NET tooling artifacts
 TestResults/
+coverage-report/
 BenchmarkDotNet.Artifacts/
 PublishProfiles/
 *.nupkg
