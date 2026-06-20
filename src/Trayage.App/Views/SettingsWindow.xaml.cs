@@ -10,6 +10,12 @@ public partial class SettingsWindow : FluentWindow
     {
         InitializeComponent();
         DataContext = viewModel;
+
+        // Height tracks 60% of the screen's work area (rather than a fixed value) so the long
+        // Settings panes get more room and scale with the monitor. Clamped to MinHeight and the
+        // available height so it never shrinks below usable or overflows the screen.
+        var workAreaHeight = System.Windows.SystemParameters.WorkArea.Height;
+        Height = Math.Clamp(workAreaHeight * 0.6, MinHeight, workAreaHeight);
     }
 
     /// <summary>Brings the window to the front, restoring it if minimised or hidden.</summary>
