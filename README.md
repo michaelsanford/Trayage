@@ -8,12 +8,12 @@
 [![PowerShell Lint](https://github.com/michaelsanford/Trayage/actions/workflows/powershell.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/powershell.yml)
 [![CodeQL](https://github.com/michaelsanford/Trayage/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/github-code-scanning/codeql)
 [![Release](https://github.com/michaelsanford/Trayage/actions/workflows/release.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/release.yml)
-[![Pages](https://github.com/michaelsanford/Trayage/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/pages/pages-build-deployment)
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windows11&logoColor=white)](#requirements)
 [![License: MIT](https://img.shields.io/github/license/michaelsanford/Trayage?color=blue)](LICENSE)
 
+[![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
 [![Build provenance](https://img.shields.io/badge/provenance-attested-success?logo=github)](https://github.com/michaelsanford/Trayage/attestations)
 [![SBOM](https://img.shields.io/badge/SBOM-CycloneDX-blueviolet)](#verifying-a-release)
 [![Signed](https://img.shields.io/badge/signed-cosign-2ea44f?logo=sigstore&logoColor=white)](#verifying-a-release)
