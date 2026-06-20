@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Trayage.App.Services;
@@ -15,6 +17,38 @@ namespace Trayage.App.ViewModels;
 
 /// <summary>A selectable poll cadence: a display label and its value in seconds.</summary>
 public sealed record PollIntervalOption(string Label, int Seconds);
+
+/// <summary>
+/// One row in the Bitbucket watched-repo picker: a discovered repository and whether it is
+/// currently watched. Flipping <see cref="IsWatched"/> notifies the owning view-model so it
+/// can update (and persist) the watched set.
+/// </summary>
+public sealed partial class WatchedRepoOption : ObservableObject
+{
+    private readonly Action<WatchedRepoOption, bool> _onToggled;
+
+    public WatchedRepoOption(string fullName, string displayName, bool isWatched, Action<WatchedRepoOption, bool> onToggled)
+    {
+        FullName = fullName;
+        DisplayName = displayName;
+        // "workspace/repo-slug" — the segment before the slash is the workspace the picker groups on.
+        var slash = fullName.IndexOf('/');
+        Workspace = slash > 0 ? fullName[..slash] : fullName;
+        _isWatched = isWatched;
+        _onToggled = onToggled;
+    }
+
+    public string FullName { get; }
+
+    public string DisplayName { get; }
+
+    /// <summary>Workspace slug, used to group the picker.</summary>
+    public string Workspace { get; }
+
+    [ObservableProperty] private bool _isWatched;
+
+    partial void OnIsWatchedChanged(bool value) => _onToggled(this, value);
+}
 
 /// <summary>
 /// Drives the Settings window: account connections, notification rules, watched repos,
@@ -58,6 +92,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _bitbucketStatus = string.Empty;
 
     [ObservableProperty] private string _newWatchedRepo = string.Empty;
+    [ObservableProperty] private string _watchedRepoError = string.Empty;
+
+    [ObservableProperty] private bool _isLoadingRepos;
+    [ObservableProperty] private string _repoLoadStatus = string.Empty;
+    [ObservableProperty] private string _repoFilter = string.Empty;
+
+    // Guards the IsWatched change handler while we populate the picker programmatically, so
+    // pre-checking discovered repos doesn't re-persist or re-fetch.
+    private bool _populatingRepos;
+    private ICollectionView? _bitbucketRepoView;
 
     public SettingsViewModel(ISettingsStore settings, GitHubProvider gitHub, BitbucketProvider bitbucket, InboxService inboxService, IToastNotifier notifier)
     {
@@ -89,6 +133,28 @@ public sealed partial class SettingsViewModel : ObservableObject
     private static void OpenNotificationRuntimeHelp() => InboxViewModel.OpenUrl(NotificationRuntimeDownloadUrl);
 
     public ObservableCollection<string> WatchedRepositories { get; } = new();
+
+    /// <summary>Discovered Bitbucket repositories shown as toggles in the picker.</summary>
+    public ObservableCollection<WatchedRepoOption> BitbucketRepoOptions { get; } = new();
+
+    /// <summary>Name-filtered view over <see cref="BitbucketRepoOptions"/> for the search box.</summary>
+    public ICollectionView BitbucketRepoView => _bitbucketRepoView ??= CreateRepoView();
+
+    private ICollectionView CreateRepoView()
+    {
+        var view = CollectionViewSource.GetDefaultView(BitbucketRepoOptions);
+        view.Filter = o => o is WatchedRepoOption opt
+            && (string.IsNullOrWhiteSpace(RepoFilter)
+                || opt.FullName.Contains(RepoFilter, StringComparison.OrdinalIgnoreCase));
+
+        // Group into collapsible workspace sections, alphabetical within each.
+        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(WatchedRepoOption.Workspace)));
+        view.SortDescriptions.Add(new SortDescription(nameof(WatchedRepoOption.Workspace), ListSortDirection.Ascending));
+        view.SortDescriptions.Add(new SortDescription(nameof(WatchedRepoOption.DisplayName), ListSortDirection.Ascending));
+        return view;
+    }
+
+    partial void OnRepoFilterChanged(string value) => BitbucketRepoView.Refresh();
 
     public IReadOnlyList<AppTheme> Themes { get; } = new[] { AppTheme.System, AppTheme.Light, AppTheme.Dark };
 
@@ -221,29 +287,159 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void AddWatchedRepo()
+    private async Task LoadBitbucketReposAsync()
     {
-        var repo = NewWatchedRepo.Trim();
-        if (repo.Length == 0 || !repo.Contains('/'))
+        if (IsLoadingRepos)
         {
             return;
         }
 
-        if (!WatchedRepositories.Contains(repo, StringComparer.OrdinalIgnoreCase))
+        if (!BitbucketConnected)
         {
-            WatchedRepositories.Add(repo);
-            Persist();
+            RepoLoadStatus = "Connect Bitbucket first to load your repositories.";
+            return;
         }
 
+        IsLoadingRepos = true;
+        RepoLoadStatus = "Loading your Bitbucket repositories…";
+        try
+        {
+            var repos = await _bitbucket.ListAccessibleRepositoriesAsync(CancellationToken.None);
+
+            _populatingRepos = true;
+            BitbucketRepoOptions.Clear();
+            var watched = new HashSet<string>(WatchedRepositories, StringComparer.OrdinalIgnoreCase);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var repo in repos)
+            {
+                if (seen.Add(repo.FullName))
+                {
+                    BitbucketRepoOptions.Add(NewOption(repo.FullName, repo.Name, watched.Contains(repo.FullName)));
+                }
+            }
+
+            // Watched repos discovery didn't return (added manually, or beyond the page cap)
+            // still appear, pre-checked, so the picker shows the full watched set.
+            foreach (var repo in WatchedRepositories)
+            {
+                if (seen.Add(repo))
+                {
+                    BitbucketRepoOptions.Add(NewOption(repo, repo, isWatched: true));
+                }
+            }
+
+            _populatingRepos = false;
+            BitbucketRepoView.Refresh();
+            RepoLoadStatus = BitbucketRepoOptions.Count == 0
+                ? "No repositories found for this account."
+                : $"{BitbucketRepoOptions.Count} repositories — toggle the ones you want to watch.";
+        }
+        catch (Exception ex)
+        {
+            _populatingRepos = false;
+            RepoLoadStatus = $"Couldn't load repositories: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingRepos = false;
+        }
+    }
+
+    [RelayCommand]
+    private void AddWatchedRepo()
+    {
+        WatchedRepoError = string.Empty;
+        var repo = RepositoryReference.Normalize(NewWatchedRepo);
+        if (repo is null)
+        {
+            WatchedRepoError = "Enter a repository as owner/repo, or paste its Bitbucket URL.";
+            return;
+        }
+
+        WatchRepo(repo);
+        SyncOptionState(repo, isWatched: true);
         NewWatchedRepo = string.Empty;
     }
 
     [RelayCommand]
     private void RemoveWatchedRepo(string? repo)
     {
-        if (repo is not null && WatchedRepositories.Remove(repo))
+        if (repo is null)
         {
-            Persist();
+            return;
+        }
+
+        UnwatchRepo(repo);
+        SyncOptionState(repo, isWatched: false);
+    }
+
+    private WatchedRepoOption NewOption(string fullName, string displayName, bool isWatched)
+        => new(fullName, displayName, isWatched, OnRepoToggled);
+
+    private void OnRepoToggled(WatchedRepoOption option, bool isWatched)
+    {
+        if (_populatingRepos)
+        {
+            return;
+        }
+
+        if (isWatched)
+        {
+            WatchRepo(option.FullName);
+        }
+        else
+        {
+            UnwatchRepo(option.FullName);
+        }
+    }
+
+    private void WatchRepo(string fullName)
+    {
+        if (WatchedRepositories.Contains(fullName, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        WatchedRepositories.Add(fullName);
+        Persist();
+        _ = _inboxService.RefreshAsync(CancellationToken.None);
+    }
+
+    private void UnwatchRepo(string fullName)
+    {
+        var existing = WatchedRepositories.FirstOrDefault(r => string.Equals(r, fullName, StringComparison.OrdinalIgnoreCase));
+        if (existing is null || !WatchedRepositories.Remove(existing))
+        {
+            return;
+        }
+
+        Persist();
+        _ = _inboxService.RefreshAsync(CancellationToken.None);
+    }
+
+    /// <summary>Keeps a loaded picker toggle in sync when the watched set changes elsewhere.</summary>
+    private void SyncOptionState(string fullName, bool isWatched)
+    {
+        var option = BitbucketRepoOptions.FirstOrDefault(o => string.Equals(o.FullName, fullName, StringComparison.OrdinalIgnoreCase));
+        if (option is null)
+        {
+            if (isWatched)
+            {
+                _populatingRepos = true;
+                BitbucketRepoOptions.Add(NewOption(fullName, fullName, isWatched: true));
+                _populatingRepos = false;
+                BitbucketRepoView.Refresh();
+            }
+
+            return;
+        }
+
+        if (option.IsWatched != isWatched)
+        {
+            _populatingRepos = true;
+            option.IsWatched = isWatched;
+            _populatingRepos = false;
         }
     }
 

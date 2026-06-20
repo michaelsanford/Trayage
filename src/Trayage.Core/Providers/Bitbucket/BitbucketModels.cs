@@ -16,6 +16,10 @@ public sealed class BitbucketTokenResponse
 
     [JsonPropertyName("token_type")]
     public string? TokenType { get; set; }
+
+    /// <summary>Space-separated scopes actually granted to this token (not PII).</summary>
+    [JsonPropertyName("scopes")]
+    public string? Scopes { get; set; }
 }
 
 /// <summary>Subset of GET /2.0/user.</summary>
@@ -39,6 +43,62 @@ public sealed class BitbucketPagedPullRequests
 
     [JsonPropertyName("next")]
     public string? Next { get; set; }
+}
+
+/// <summary>A page of the user's workspaces (GET /2.0/user/workspaces).</summary>
+public sealed class BitbucketPagedUserWorkspaces
+{
+    [JsonPropertyName("values")]
+    public List<BitbucketUserWorkspace> Values { get; set; } = new();
+
+    [JsonPropertyName("next")]
+    public string? Next { get; set; }
+}
+
+/// <summary>
+/// One entry from the user's workspaces list. Tolerates both shapes Bitbucket may return:
+/// the workspace fields inline, or nested under a <c>workspace</c> object (membership-style).
+/// </summary>
+public sealed class BitbucketUserWorkspace
+{
+    [JsonPropertyName("slug")]
+    public string? Slug { get; set; }
+
+    [JsonPropertyName("workspace")]
+    public BitbucketWorkspaceRef? Workspace { get; set; }
+
+    public string? EffectiveSlug => string.IsNullOrEmpty(Slug) ? Workspace?.Slug : Slug;
+}
+
+/// <summary>Nested workspace reference carrying the addressing slug.</summary>
+public sealed class BitbucketWorkspaceRef
+{
+    [JsonPropertyName("slug")]
+    public string? Slug { get; set; }
+}
+
+/// <summary>A page of repositories (GET /2.0/repositories/{workspace}).</summary>
+public sealed class BitbucketPagedRepositories
+{
+    [JsonPropertyName("values")]
+    public List<BitbucketRepositorySummary> Values { get; set; } = new();
+
+    [JsonPropertyName("next")]
+    public string? Next { get; set; }
+}
+
+/// <summary>Subset of a repository object used to populate the watched-repo picker.</summary>
+public sealed class BitbucketRepositorySummary
+{
+    /// <summary>"workspace/repo-slug" — matches <see cref="Models.InboxItem.RepositoryFullName"/>.</summary>
+    [JsonPropertyName("full_name")]
+    public string? FullName { get; set; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("updated_on")]
+    public string? UpdatedOn { get; set; }
 }
 
 public sealed class BitbucketPullRequest
