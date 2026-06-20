@@ -190,7 +190,10 @@
                                             <Setter Property="Template">
                                                 <Setter.Value>
                                                     <ControlTemplate TargetType="{x:Type GroupItem}">
-                                                        <Expander IsExpanded="True" Margin="0,0,0,4">
+                                                        <!-- Collapsed by default so large accounts aren't a wall of repos;
+                                                             a typed filter auto-expands groups so matches are visible. -->
+                                                        <Expander Margin="0,0,0,4"
+                                                                  IsExpanded="{Binding DataContext.RepoFilterActive, RelativeSource={RelativeSource AncestorType=ItemsControl}, Mode=OneWay}">
                                                             <Expander.Header>
                                                                 <StackPanel Orientation="Horizontal">
                                                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />

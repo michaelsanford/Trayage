@@ -154,7 +154,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         return view;
     }
 
-    partial void OnRepoFilterChanged(string value) => BitbucketRepoView.Refresh();
+    /// <summary>True while a filter is typed — the picker expands matching groups so results show.</summary>
+    public bool RepoFilterActive => !string.IsNullOrWhiteSpace(RepoFilter);
+
+    partial void OnRepoFilterChanged(string value)
+    {
+        BitbucketRepoView.Refresh();
+        OnPropertyChanged(nameof(RepoFilterActive));
+    }
 
     public IReadOnlyList<AppTheme> Themes { get; } = new[] { AppTheme.System, AppTheme.Light, AppTheme.Dark };
 
