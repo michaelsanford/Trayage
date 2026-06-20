@@ -147,30 +147,106 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Watched repos -->
-            <TabItem Header="Watched repos">
+            <!-- Bitbucket: watched-repo picker. Bitbucket has no notification inbox, so the
+                 repos chosen here are the ones Trayage actively queries for activity. -->
+            <TabItem Header="Bitbucket">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
                     <StackPanel>
-                        <TextBlock Text="Watched repositories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
-                        <TextBlock Text="Add repositories (owner/repo) to be notified about all activity, even when you're not directly involved."
+                        <TextBlock Text="Bitbucket repositories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <TextBlock Text="Bitbucket has no notification inbox, so Trayage watches the repositories you pick here — surfacing their pull requests, review requests, and activity. Load your repositories and toggle the ones you care about. (Whether watched-repo activity also raises a toast is set on the Notifications tab.)"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Margin="0,0,0,16" />
 
-                        <Grid Margin="0,0,0,16">
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <ui:Button Grid.Column="0"
+                                       Content="Load my repositories"
+                                       Icon="{ui:SymbolIcon ArrowSync24}"
+                                       Appearance="Primary"
+                                       IsEnabled="{Binding BitbucketConnected}"
+                                       Command="{Binding LoadBitbucketReposCommand}"
+                                       Margin="0,0,8,0" />
+                            <ui:TextBox Grid.Column="1"
+                                        PlaceholderText="Filter…"
+                                        Text="{Binding RepoFilter, UpdateSourceTrigger=PropertyChanged}" />
+                        </Grid>
+
+                        <TextBlock Text="{Binding RepoLoadStatus}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,8"
+                                   Visibility="{Binding RepoLoadStatus, Converter={StaticResource EmptyStringToCollapsed}}" />
+
+                        <!-- Grouped into collapsible workspace sections (CollectionView grouping). -->
+                        <ItemsControl ItemsSource="{Binding BitbucketRepoView}" Margin="0,0,0,16">
+                            <ItemsControl.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.ContainerStyle>
+                                        <Style TargetType="{x:Type GroupItem}">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="{x:Type GroupItem}">
+                                                        <!-- Collapsed by default so large accounts aren't a wall of repos;
+                                                             a typed filter auto-expands groups so matches are visible. -->
+                                                        <Expander Margin="0,0,0,4"
+                                                                  IsExpanded="{Binding DataContext.RepoFilterActive, RelativeSource={RelativeSource AncestorType=ItemsControl}, Mode=OneWay}">
+                                                            <Expander.Header>
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                                    <TextBlock Text="{Binding ItemCount, StringFormat=' ({0})'}"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                                </StackPanel>
+                                                            </Expander.Header>
+                                                            <ItemsPresenter Margin="12,4,0,4" />
+                                                        </Expander>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </GroupStyle.ContainerStyle>
+                                </GroupStyle>
+                            </ItemsControl.GroupStyle>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <ui:CardControl Margin="0,0,0,6">
+                                        <ui:CardControl.Header>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding FullName}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                        </ui:CardControl.Header>
+                                        <ui:ToggleSwitch IsChecked="{Binding IsWatched}" />
+                                    </ui:CardControl>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Add a repository manually" FontWeight="SemiBold" Margin="0,0,0,8" />
+                        <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <ui:TextBox Grid.Column="0"
-                                        PlaceholderText="owner/repo"
+                                        PlaceholderText="owner/repo or a Bitbucket URL"
                                         Text="{Binding NewWatchedRepo, UpdateSourceTrigger=PropertyChanged}"
                                         Margin="0,0,8,0" />
                             <ui:Button Grid.Column="1"
                                        Content="Add"
-                                       Appearance="Primary"
+                                       Appearance="Secondary"
                                        Command="{Binding AddWatchedRepoCommand}" />
                         </Grid>
+                        <TextBlock Text="{Binding WatchedRepoError}"
+                                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12"
+                                   Visibility="{Binding WatchedRepoError, Converter={StaticResource EmptyStringToCollapsed}}" />
 
                         <ItemsControl ItemsSource="{Binding WatchedRepositories}">
                             <ItemsControl.ItemTemplate>
@@ -188,6 +264,35 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- GitHub: informational. GitHub watching/notifications are managed on GitHub;
+                 Trayage only mirrors the resulting notifications inbox. -->
+            <TabItem Header="GitHub">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
+                    <StackPanel>
+                        <TextBlock Text="GitHub repositories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <TextBlock Text="Your GitHub items mirror your GitHub notifications inbox. To choose which repositories notify you, manage watching and notification preferences on GitHub itself — Trayage shows whatever GitHub delivers."
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,16" />
+
+                        <ui:HyperlinkButton Content="Open your GitHub notifications inbox"
+                                            NavigateUri="https://github.com/notifications"
+                                            Margin="0,0,0,4" />
+                        <ui:HyperlinkButton Content="Manage which repositories you watch"
+                                            NavigateUri="https://github.com/watching"
+                                            Margin="0,0,0,4" />
+                        <ui:HyperlinkButton Content="GitHub notification settings"
+                                            NavigateUri="https://github.com/settings/notifications"
+                                            Margin="0,0,0,16" />
+
+                        <TextBlock Text="Trayage can only escalate notifications GitHub already sends into Windows toasts (see the Notifications tab); it can't surface activity GitHub isn't notifying you about."
+                                   TextWrapping="Wrap"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

@@ -13,14 +13,22 @@ using Trayage.Core.Security;
 namespace Trayage.Core.Providers.Bitbucket;
 
 /// <summary>
+/// A repository the signed-in user can access, for the watched-repo picker.
+/// <paramref name="FullName"/> is the "workspace/repo-slug" used as the watched key.
+/// </summary>
+public sealed record RepositorySummary(string FullName, string Name);
+
+/// <summary>
 /// Bitbucket Cloud inbox provider. Bitbucket has no notification inbox and no device
 /// flow, so this authenticates with the authorization-code flow over a loopback redirect
-/// and assembles an inbox from pull-request queries:
+/// and assembles an inbox from per-watched-repo pull-request queries:
 /// <list type="bullet">
 ///   <item>open PRs you authored → <see cref="InboxItemKind.Assignment"/>;</item>
-///   <item>open PRs in a watched repo where you're a reviewer → <see cref="InboxItemKind.ReviewRequest"/>;</item>
-///   <item>all other open PRs in a watched repo → <see cref="InboxItemKind.RepoActivity"/>.</item>
+///   <item>open PRs where you're a reviewer → <see cref="InboxItemKind.ReviewRequest"/>;</item>
+///   <item>all other open PRs → <see cref="InboxItemKind.RepoActivity"/>.</item>
 /// </list>
+/// Because Bitbucket retired its cross-repo "PRs for a user" endpoint (CHANGE-2770), all
+/// three classes are sourced per watched repo — so a PR only surfaces if its repo is watched.
 /// Mentions and CI/check status are not surfaced for Bitbucket in this version (no
 /// first-class API), which is a known limitation documented in the README.
 /// </summary>
@@ -40,6 +48,7 @@ public sealed class BitbucketProvider : IInboxProvider
     private string? _accessToken;
     private DateTimeOffset _accessExpiresUtc = DateTimeOffset.MinValue;
     private string? _userUuid;
+    private string? _grantedScopes;
 
     public BitbucketProvider(
         IOptions<BitbucketOptions> options,
@@ -164,8 +173,10 @@ public sealed class BitbucketProvider : IInboxProvider
             return Array.Empty<InboxItem>();
         }
 
+        // Bitbucket retired the cross-repo "PRs for a user" endpoint (CHANGE-2770), so every
+        // class of item — authored, review-requested, and general activity — is now sourced
+        // per watched repo. A repo must therefore be watched for its PRs to surface.
         var tasks = new List<Task<List<InboxItem>>>();
-        tasks.Add(GetAuthoredAsync(uuid, cancellationToken));
 
         // Limit concurrent HTTP queries using a semaphore. 4 is a safe compromise between speed and rate limits.
         using var semaphore = new SemaphoreSlim(4);
@@ -189,16 +200,163 @@ public sealed class BitbucketProvider : IInboxProvider
         return byId.Values.ToList();
     }
 
-    private async Task<List<InboxItem>> GetAuthoredAsync(string uuid, CancellationToken ct)
+    /// <summary>
+    /// Lists the repositories the signed-in user can access, most-recently-updated first.
+    /// Bitbucket retired the cross-workspace listing endpoints (CHANGE-2770: both
+    /// <c>/2.0/repositories?role=…</c> and <c>/2.0/user/permissions/repositories</c> now 410),
+    /// so the supported path is to enumerate the user's workspaces via <c>/2.0/user/workspaces</c>
+    /// and list each workspace's repositories with <c>/2.0/repositories/{workspace}</c>. A user
+    /// can't hold repo access without workspace membership, so this covers everything they can
+    /// reach. Returns an empty list (never throws) when not connected.
+    /// </summary>
+    public async Task<IReadOnlyList<RepositorySummary>> ListAccessibleRepositoriesAsync(CancellationToken cancellationToken)
     {
-        var url = $"{ApiBase}/pullrequests/{Uri.EscapeDataString(uuid)}?state=OPEN";
-        var prs = await GetAllPullRequestsAsync(url, ct).ConfigureAwait(false);
-        var list = new List<InboxItem>(prs.Count);
-        foreach (var pr in prs)
+        if (!IsConnected)
         {
-            list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.Assignment, string.Empty));
+            return Array.Empty<RepositorySummary>();
         }
-        return list;
+
+        var token = await GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
+        if (token is null)
+        {
+            return Array.Empty<RepositorySummary>();
+        }
+
+        try
+        {
+            var workspaces = await GetUserWorkspaceSlugsAsync(cancellationToken).ConfigureAwait(false);
+            if (workspaces.Count == 0)
+            {
+                return Array.Empty<RepositorySummary>();
+            }
+
+            using var semaphore = new SemaphoreSlim(4);
+            var tasks = workspaces.Select(ws => GetWorkspaceRepositoriesAsync(ws, semaphore, cancellationToken)).ToList();
+            var perWorkspace = await Task.WhenAll(tasks).ConfigureAwait(false);
+
+            // Dedupe by full name (defensive), then most-recently-updated first.
+            var byName = new Dictionary<string, BitbucketRepositorySummary>(StringComparer.OrdinalIgnoreCase);
+            foreach (var repo in perWorkspace.SelectMany(r => r))
+            {
+                if (!string.IsNullOrEmpty(repo.FullName))
+                {
+                    byName[repo.FullName] = repo;
+                }
+            }
+
+            return byName.Values
+                .OrderByDescending(r => BitbucketMapping.ParseTimestamp(r.UpdatedOn))
+                .Select(r => new RepositorySummary(r.FullName!, r.Name ?? r.FullName!))
+                .ToList();
+        }
+        catch (InvalidOperationException)
+        {
+            // A clear, user-actionable problem (e.g. a missing OAuth scope) — surface it to
+            // the picker rather than swallowing it into a misleading empty list.
+            throw;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Failed to list accessible Bitbucket repositories.");
+            return Array.Empty<RepositorySummary>();
+        }
+    }
+
+    private async Task<List<string>> GetUserWorkspaceSlugsAsync(CancellationToken ct)
+    {
+        var slugs = new List<string>();
+        var next = $"{ApiBase}/user/workspaces?pagelen=100";
+        var page = 0;
+
+        while (next is not null && page < MaxPagesPerQuery)
+        {
+            var data = await GetWithScopeCheckAsync<BitbucketPagedUserWorkspaces>(next, "account", "Account", ct).ConfigureAwait(false);
+            if (data is null)
+            {
+                break;
+            }
+
+            foreach (var workspace in data.Values)
+            {
+                if (workspace.EffectiveSlug is { Length: > 0 } slug)
+                {
+                    slugs.Add(slug);
+                }
+            }
+
+            next = data.Next;
+            page++;
+        }
+
+        return slugs;
+    }
+
+    private async Task<List<BitbucketRepositorySummary>> GetWorkspaceRepositoriesAsync(string workspace, SemaphoreSlim semaphore, CancellationToken ct)
+    {
+        await semaphore.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var list = new List<BitbucketRepositorySummary>();
+            var next = $"{ApiBase}/repositories/{Uri.EscapeDataString(workspace)}?sort=-updated_on&pagelen=100" +
+                       "&fields=next,values.full_name,values.name,values.updated_on";
+            var page = 0;
+
+            while (next is not null && page < MaxPagesPerQuery)
+            {
+                var data = await GetWithScopeCheckAsync<BitbucketPagedRepositories>(next, "repository", "Repositories", ct).ConfigureAwait(false);
+                if (data is null)
+                {
+                    break;
+                }
+
+                list.AddRange(data.Values);
+                next = data.Next;
+                page++;
+            }
+
+            if (next is not null)
+            {
+                _logger.LogInformation("Bitbucket workspace {Workspace} has more repositories than the {Max}-page cap; some omitted. Use manual entry to add them.", workspace, MaxPagesPerQuery);
+            }
+
+            return list;
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// GET that deserializes <typeparamref name="T"/>, but turns a 403 into an actionable
+    /// error naming the token's actual scopes and the consumer permission to enable. A token
+    /// refresh keeps whatever scopes it was first authorized with, so a fresh reconnect is
+    /// required after changing consumer permissions.
+    /// </summary>
+    private async Task<T?> GetWithScopeCheckAsync<T>(string url, string scope, string consumerPermission, CancellationToken ct) where T : class
+    {
+        using var response = await SendWithAuthAsync(() => new HttpRequestMessage(HttpMethod.Get, url), ct).ConfigureAwait(false);
+        if (response is null)
+        {
+            return null;
+        }
+
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            var scopes = string.IsNullOrEmpty(_grantedScopes) ? "unknown" : _grantedScopes;
+            throw new InvalidOperationException(
+                $"Bitbucket returned 403 — this token is missing the \"{scope}\" scope. Its scopes are: {scopes}. " +
+                $"Enable \"{consumerPermission}: Read\" on the OAuth consumer (it's separate from Pull requests), then " +
+                "Disconnect and reconnect Bitbucket — a token refresh keeps the old scopes; only a fresh authorization picks up new ones.");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        return await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: ct).ConfigureAwait(false);
     }
 
     private async Task<List<InboxItem>> GetWatchedRepoAsync(string repo, string uuid, SemaphoreSlim semaphore, CancellationToken ct)
@@ -207,9 +365,16 @@ public sealed class BitbucketProvider : IInboxProvider
         try
         {
             var list = new List<InboxItem>();
-            // Review requests (more specific) first, then general activity.
-            var reviewerQuery = Uri.EscapeDataString($"reviewers.uuid=\"{uuid}\"");
-            var reviewerUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN&q={reviewerQuery}";
+
+            // Authored by me and review-requested of me are the specific classes; the Upsert
+            // priority means the most specific kind wins if a PR matches more than one query.
+            var authorUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN&q={Uri.EscapeDataString($"author.uuid=\"{uuid}\"")}";
+            foreach (var pr in await GetAllPullRequestsAsync(authorUrl, ct).ConfigureAwait(false))
+            {
+                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.Assignment, repo));
+            }
+
+            var reviewerUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN&q={Uri.EscapeDataString($"reviewers.uuid=\"{uuid}\"")}";
             foreach (var pr in await GetAllPullRequestsAsync(reviewerUrl, ct).ConfigureAwait(false))
             {
                 list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.ReviewRequest, repo));
@@ -434,6 +599,12 @@ public sealed class BitbucketProvider : IInboxProvider
     {
         _accessToken = token.AccessToken;
         _accessExpiresUtc = DateTimeOffset.UtcNow.AddSeconds(Math.Max(token.ExpiresIn, 60));
+        _grantedScopes = token.Scopes;
+
+        // The scopes are not secret and not PII, but they're the single best clue when an
+        // API call 403s: a refresh keeps the scopes the token was first authorized with, so
+        // this reveals whether a fresh re-authorization is needed to pick up consumer changes.
+        _logger.LogInformation("Bitbucket token scopes: {Scopes}", string.IsNullOrEmpty(token.Scopes) ? "(none reported)" : token.Scopes);
 
         if (!string.IsNullOrEmpty(token.AccessToken))
         {

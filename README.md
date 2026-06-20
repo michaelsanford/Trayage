@@ -47,7 +47,9 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
   - **GitHub** via the notifications API — review requests, mentions, assignments, CI
     activity, and watched-repo activity.
   - **Bitbucket Cloud** via pull-request queries — PRs you authored, PRs in watched repos
-    where you're a reviewer, and all activity in watched repos.
+    where you're a reviewer, and all activity in watched repos. Because Bitbucket has no
+    notification inbox, the **Bitbucket** settings tab lets you load the repositories you
+    can access and toggle the ones to watch (no need to type `owner/repo` by hand).
 - **Native toast notifications** with per-class toggles (review requests, mentions &
   assignments, CI/check status) plus **all activity on repositories you choose to watch**.
   Clicking a toast opens the page. Toasts use the Windows App SDK and require the
@@ -58,9 +60,11 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
   blue with an **amber top bar** when items are waiting, plain blue when you're caught up,
   **grey** when nothing is connected, and **red** when an account is configured but has no
   live session.
-- **Settings** window (Accounts, Notifications, Watched repos, General): poll cadence,
+- **Settings** window (Accounts, Notifications, Bitbucket, GitHub, General): poll cadence,
   light/dark/system theme, inbox grouping and read-item visibility, verbose logging, and
-  "start with Windows".
+  "start with Windows". The **Bitbucket** tab is the watched-repo picker; the **GitHub** tab
+  links out to GitHub's own watching and notification settings (which is where GitHub
+  activity is controlled).
 - **Secure tokens** — OAuth tokens are encrypted at rest with Windows DPAPI; nothing is
   stored in plaintext.
 
@@ -112,7 +116,16 @@ Register one OAuth app per provider (once), then drop the identifiers into a git
 - **Bitbucket Cloud** — *Workspace settings → OAuth consumers → Add consumer.* Set the callback
   to exactly `http://localhost:33418/callback`, grant **Account**, **Repositories**, and
   **Pull requests** read access, and copy the **Client ID** (older UIs label it the **Key**)
-  and the **Secret**.
+  and the **Secret**. Two read permissions are load-bearing, and they are **separate
+  checkboxes**: **Account** backs the `/2.0/user` and `/2.0/user/workspaces` calls (workspace
+  discovery), and **Repositories** backs the per-workspace repo listing
+  (`/2.0/repositories/{workspace}`) behind the **Bitbucket** settings tab. *"Pull requests:
+  Read"* does **not** grant repository listing — enable **Repositories: Read** explicitly.
+  Trayage logs the token's granted scopes on connect (`Bitbucket token scopes: …`); if the
+  picker errors or shows nothing, check that line for `account` and `repository`. A token only
+  carries the scopes it was **first authorized with**, so after changing consumer permissions
+  you must **disconnect and reconnect** (a refresh keeps the old scopes) for the new ones to
+  take effect.
 
 | Provider UI field | Config key | Release secret |
 | --- | --- | --- |
@@ -178,8 +191,11 @@ cosign verify-blob `
 
 - **Bitbucket mentions and CI/check status are not surfaced.** Bitbucket Cloud has no
   notification inbox and no first-class mention feed, so Trayage assembles its Bitbucket
-  inbox from pull-request queries only. Review-request detection requires the repo to be in
-  your watched list (there is no cross-repo "PRs I'm reviewing" endpoint).
+  inbox from pull-request queries only.
+- **Bitbucket PRs surface only for watched repos.** Bitbucket retired its cross-repo
+  endpoints (CHANGE-2770), so authored PRs, review requests, and repo activity are all
+  queried per watched repo. A PR appears only if its repository is on your watched list — add
+  repositories from the **Bitbucket** settings tab.
 - **Bitbucket loopback port is fixed** at `33418` to match the consumer callback URL. If
   that port is in use, the connect step will report an error.
 
