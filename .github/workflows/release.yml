@@ -73,12 +73,14 @@ jobs:
           GH_OAUTH_CLIENT_ID: ${{ secrets.GH_OAUTH_CLIENT_ID }}
           BITBUCKET_OAUTH_KEY: ${{ secrets.BITBUCKET_OAUTH_KEY }}
           BITBUCKET_OAUTH_SECRET: ${{ secrets.BITBUCKET_OAUTH_SECRET }}
+          GITLAB_OAUTH_APP_ID: ${{ secrets.GITLAB_OAUTH_APP_ID }}
         run: |
           $path = "publish/appsettings.json"
           $json = Get-Content $path -Raw | ConvertFrom-Json
-          $json.GitHub.ClientId   = $env:GH_OAUTH_CLIENT_ID
-          $json.Bitbucket.Key     = $env:BITBUCKET_OAUTH_KEY
-          $json.Bitbucket.Secret  = $env:BITBUCKET_OAUTH_SECRET
+          $json.GitHub.ClientId      = $env:GH_OAUTH_CLIENT_ID
+          $json.Bitbucket.Key        = $env:BITBUCKET_OAUTH_KEY
+          $json.Bitbucket.Secret     = $env:BITBUCKET_OAUTH_SECRET
+          $json.GitLab.ApplicationId = $env:GITLAB_OAUTH_APP_ID
           $json | ConvertTo-Json -Depth 10 | Set-Content $path -Encoding utf8
           Write-Host "Injected OAuth client identifiers into $path"
 
