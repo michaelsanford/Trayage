@@ -81,7 +81,7 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <ui:CardControl Margin="0,0,0,4">
+                        <ui:CardControl Margin="0,0,0,12">
                             <ui:CardControl.Header>
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="{StaticResource BitbucketMarkGeometry}"
@@ -211,7 +211,7 @@
 
             <!-- Bitbucket: watched-repo picker. Bitbucket has no notification inbox, so the
                  repos chosen here are the ones Trayage actively queries for activity. -->
-            <TabItem Header="Bitbucket" x:Name="BitbucketTab">
+            <TabItem Header="Bitbucket" x:Name="BitbucketTab" IsEnabled="{Binding BitbucketConnected}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
                     <StackPanel>
                         <TextBlock Text="Bitbucket repositories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
@@ -324,7 +324,7 @@
 
             <!-- GitHub: informational. GitHub watching/notifications are managed on GitHub;
                  Trayage only mirrors the resulting notifications inbox. -->
-            <TabItem Header="GitHub">
+            <TabItem Header="GitHub" IsEnabled="{Binding GitHubConnected}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
                     <StackPanel>
                         <TextBlock Text="GitHub repositories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
@@ -344,6 +344,32 @@
                                             Margin="0,0,0,16" />
 
                         <TextBlock Text="Trayage can only escalate notifications GitHub already sends into Windows toasts (see the Notifications tab); it can't surface activity GitHub isn't notifying you about."
+                                   TextWrapping="Wrap"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- GitLab: informational. GitLab to-dos and notification settings are managed on
+                 GitLab; Trayage only mirrors the resulting to-do inbox. -->
+            <TabItem Header="GitLab" IsEnabled="{Binding GitLabConnected}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
+                    <StackPanel>
+                        <TextBlock Text="GitLab to-dos" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <TextBlock Text="Your GitLab items mirror your GitLab To-Do list. To choose what creates a to-do, manage your notification settings on GitLab itself — Trayage shows whatever GitLab delivers."
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,16" />
+
+                        <ui:HyperlinkButton Content="Open your GitLab To-Do list"
+                                            NavigateUri="https://gitlab.com/dashboard/todos"
+                                            Margin="0,0,0,4" />
+                        <ui:HyperlinkButton Content="GitLab notification settings"
+                                            NavigateUri="https://gitlab.com/-/profile/notifications"
+                                            Margin="0,0,0,16" />
+
+                        <TextBlock Text="Trayage can only surface to-dos GitLab already creates (assignments, mentions, review/approval requests, failed pipelines, and so on); it can't surface activity GitLab isn't tracking as a to-do."
                                    TextWrapping="Wrap"
                                    FontSize="12"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
