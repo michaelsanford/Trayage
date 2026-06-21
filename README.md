@@ -12,6 +12,7 @@
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windows11&logoColor=white)](#requirements)
 [![License: MIT](https://img.shields.io/github/license/michaelsanford/Trayage?color=blue)](LICENSE)
+[![Mirror](https://github.com/michaelsanford/Trayage/actions/workflows/mirror.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/mirror.yml)
 
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
 [![Build provenance](https://img.shields.io/badge/provenance-attested-success?logo=github)](https://github.com/michaelsanford/Trayage/attestations)
