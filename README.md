@@ -132,8 +132,8 @@ Register one OAuth app per provider (once), then drop the identifiers into a git
   take effect.
 - **GitLab.com** — *Preferences → Applications → Add new application.* Leave **Confidential**
   **unchecked** (Trayage is a public client using the OAuth device flow), tick the **read_api**
-  scope, and copy the **Application ID**. The device flow needs **no redirect URI** and no
-  secret.
+  (to-do inbox) and **read_user** (account username via `/user`) scopes, and copy the
+  **Application ID**. The device flow needs **no redirect URI** and no secret.
 
 | Provider UI field | Config key | Release secret |
 | --- | --- | --- |
