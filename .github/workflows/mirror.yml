@@ -1,0 +1,51 @@
+name: Mirror
+
+# Pure one-way mirror of GitHub -> GitLab and Bitbucket. Work is never integrated back from
+# the mirrors. Runs server-side so it fires however main is updated (including squash-merges
+# in the GitHub UI). Mirrors the main branch and release tags only.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+# Serialize so concurrent main updates don't race their pushes; never cancel a push mid-flight.
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    name: Mirror to GitLab & Bitbucket
+    runs-on: ubuntu-latest
+    steps:
+      # Bare clone (not actions/checkout): gives the real main ref and all tags regardless of
+      # whether the run was triggered by a branch push, a tag push, or a manual dispatch, so the
+      # same two push commands always reflect the current state. No third-party actions involved.
+      - name: Clone origin (bare)
+        run: git clone --bare "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" repo.git
+
+      - name: Push to GitLab
+        # Skip cleanly until the token secret exists; a present-but-invalid token still fails loudly.
+        if: ${{ env.TOKEN != '' }}
+        working-directory: repo.git
+        env:
+          TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
+        run: |
+          url="https://oauth2:${TOKEN}@gitlab.com/michaelsanford/Trayage.git"
+          git push --force "$url" main
+          git push --force --tags "$url"
+
+      - name: Push to Bitbucket
+        # always() so a GitLab failure doesn't skip Bitbucket; env guard skips until configured.
+        if: ${{ always() && env.TOKEN != '' }}
+        working-directory: repo.git
+        env:
+          TOKEN: ${{ secrets.BITBUCKET_MIRROR_TOKEN }}
+        run: |
+          url="https://x-token-auth:${TOKEN}@bitbucket.org/michaelsanford/trayage.git"
+          git push --force "$url" main
+          git push --force --tags "$url"
