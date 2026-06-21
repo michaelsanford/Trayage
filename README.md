@@ -28,7 +28,11 @@ tray app that watched Bitbucket Server for pull requests needing review. Trayage
 the idea on .NET 10 with a Fluent (Windows 11) UI, adds GitHub, and broadens "needs review"
 into a configurable inbox.
 
-**Website:** https://michaelsanford.github.io/Trayage/
+**Website:** https://www.michaelsanford.com/Trayage/
+
+**Mirrors:** read-only copies (no collaboration — issues and PRs stay on GitHub) are mirrored
+to [GitLab](https://gitlab.com/michaelsanford/Trayage) and
+[Bitbucket](https://bitbucket.org/michaelsanford/trayage).
 
 ## Install
 
@@ -97,6 +101,21 @@ dotnet publish src/Trayage.App -c Release -r win-x64   --self-contained
 dotnet publish src/Trayage.App -c Release -r win-arm64 --self-contained
 ```
 
+## Where Trayage stores data
+
+Everything lives under `%APPDATA%\Trayage\`:
+
+| File | Contents |
+| --- | --- |
+| `settings.json` | Non-secret settings (poll interval, theme, watched repos, connection state) |
+| `secrets.dat` | OAuth access/refresh tokens, each encrypted with DPAPI (CurrentUser) |
+| `logs\trayage.log` | Rolling application log |
+| `logs\crash.log` | Unhandled-exception records |
+
+Logs stay on your machine and are never transmitted. Tokens are never written to them, and
+Trayage keeps account identifiers — your provider login and user ID — out of the logs on a
+best-effort basis.
+
 ## OAuth setup (source builds only)
 
 Released builds ship with OAuth client identifiers baked in, so **end users never configure
@@ -147,21 +166,6 @@ Releases inject these in CI from repository **secrets** (right column). The Bitb
 ships embedded in the binary, so it isn't truly confidential — treat it as a public
 identifier, as `gh` and other desktop OAuth clients do. Tokens obtained at connect time are
 stored separately and DPAPI-encrypted (see [data storage](#where-trayage-stores-data)).
-
-## Where Trayage stores data
-
-Everything lives under `%APPDATA%\Trayage\`:
-
-| File | Contents |
-| --- | --- |
-| `settings.json` | Non-secret settings (poll interval, theme, watched repos, connection state) |
-| `secrets.dat` | OAuth access/refresh tokens, each encrypted with DPAPI (CurrentUser) |
-| `logs\trayage.log` | Rolling application log |
-| `logs\crash.log` | Unhandled-exception records |
-
-Logs stay on your machine and are never transmitted. Tokens are never written to them, and
-Trayage keeps account identifiers — your provider login and user ID — out of the logs on a
-best-effort basis.
 
 ## Verifying a release
 
