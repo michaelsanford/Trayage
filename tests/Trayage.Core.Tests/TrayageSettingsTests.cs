@@ -31,6 +31,8 @@ public sealed class TrayageSettingsTests
         original.GitHub.Connected = true;
         original.GitHub.AccountLogin = "octocat";
         original.Bitbucket.AccountLogin = "stelvio";
+        original.GitLab.Connected = true;
+        original.GitLab.AccountLogin = "tanuki";
 
         var clone = original.Clone();
         clone.WatchedRepositories.Add("x/y");
@@ -38,12 +40,16 @@ public sealed class TrayageSettingsTests
         clone.GitHub.Connected = false;
         clone.GitHub.AccountLogin = "changed";
         clone.Bitbucket.AccountLogin = "changed";
+        clone.GitLab.Connected = false;
+        clone.GitLab.AccountLogin = "changed";
 
         Assert.Equal(new[] { "a/b" }, original.WatchedRepositories);
         Assert.True(original.Notifications.ReviewRequests);
         Assert.True(original.GitHub.Connected);
         Assert.Equal("octocat", original.GitHub.AccountLogin);
         Assert.Equal("stelvio", original.Bitbucket.AccountLogin);
+        Assert.True(original.GitLab.Connected);
+        Assert.Equal("tanuki", original.GitLab.AccountLogin);
     }
 
     [Fact]
@@ -56,5 +62,6 @@ public sealed class TrayageSettingsTests
         Assert.NotSame(original.WatchedRepositories, clone.WatchedRepositories);
         Assert.NotSame(original.GitHub, clone.GitHub);
         Assert.NotSame(original.Bitbucket, clone.Bitbucket);
+        Assert.NotSame(original.GitLab, clone.GitLab);
     }
 }
