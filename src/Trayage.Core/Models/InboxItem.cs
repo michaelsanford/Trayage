@@ -5,6 +5,7 @@ public enum ProviderKind
 {
     GitHub,
     Bitbucket,
+    GitLab,
 }
 
 /// <summary>

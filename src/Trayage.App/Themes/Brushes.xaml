@@ -9,6 +9,9 @@
          flyout backgrounds, so a white glyph on top stays high-contrast in either theme. -->
     <SolidColorBrush x:Key="BitbucketBlueBrush" Color="#2684FF" />
 
+    <!-- GitLab brand orange: legible filled against both light and dark flyout backgrounds. -->
+    <SolidColorBrush x:Key="GitLabOrangeBrush" Color="#FC6D26" />
+
     <!-- Unread indicator dot (was an inline #E5484D in the flyout). -->
     <SolidColorBrush x:Key="TrayageUnreadBrush" Color="#E5484D" />
 

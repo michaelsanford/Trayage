@@ -12,6 +12,7 @@ using Trayage.Core.Notifications;
 using Trayage.Core.Providers;
 using Trayage.Core.Providers.Bitbucket;
 using Trayage.Core.Providers.GitHub;
+using Trayage.Core.Providers.GitLab;
 
 namespace Trayage.App.ViewModels;
 
@@ -62,6 +63,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly ISettingsStore _settings;
     private readonly GitHubProvider _gitHub;
     private readonly BitbucketProvider _bitbucket;
+    private readonly GitLabProvider _gitlab;
     private readonly InboxService _inboxService;
     private readonly IToastNotifier _notifier;
     private bool _loading;
@@ -91,6 +93,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _bitbucketBusy;
     [ObservableProperty] private string _bitbucketStatus = string.Empty;
 
+    [ObservableProperty] private bool _gitLabConnected;
+    [ObservableProperty] private string _gitLabAccountLabel = "Not connected";
+    [ObservableProperty] private bool _gitLabBusy;
+    [ObservableProperty] private string _gitLabDeviceInstruction = string.Empty;
+    [ObservableProperty] private string _gitLabUserCode = string.Empty;
+
     [ObservableProperty] private string _newWatchedRepo = string.Empty;
     [ObservableProperty] private string _watchedRepoError = string.Empty;
 
@@ -107,11 +115,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     // tab doesn't re-hit the API; manual "Refresh" always reloads regardless.
     private bool _reposAutoLoaded;
 
-    public SettingsViewModel(ISettingsStore settings, GitHubProvider gitHub, BitbucketProvider bitbucket, InboxService inboxService, IToastNotifier notifier)
+    public SettingsViewModel(ISettingsStore settings, GitHubProvider gitHub, BitbucketProvider bitbucket, GitLabProvider gitlab, InboxService inboxService, IToastNotifier notifier)
     {
         _settings = settings;
         _gitHub = gitHub;
         _bitbucket = bitbucket;
+        _gitlab = gitlab;
         _inboxService = inboxService;
         _notifier = notifier;
 
@@ -294,6 +303,78 @@ public sealed partial class SettingsViewModel : ObservableObject
         BitbucketConnected = false;
         BitbucketAccountLabel = "Not connected";
         BitbucketStatus = string.Empty;
+        _ = _inboxService.RefreshAsync(CancellationToken.None);
+    }
+
+    [RelayCommand]
+    private async Task ConnectGitLabAsync()
+    {
+        if (GitLabBusy)
+        {
+            return;
+        }
+
+        GitLabBusy = true;
+        GitLabUserCode = string.Empty;
+        GitLabDeviceInstruction = "Requesting a device code from GitLab…";
+        try
+        {
+            await _gitlab.ConnectAsync(prompt =>
+            {
+                GitLabUserCode = prompt.UserCode;
+                GitLabDeviceInstruction = $"Enter this code at {prompt.VerificationUri} (opening your browser…):";
+                InboxViewModel.OpenUrl(prompt.VerificationUri);
+                return Task.CompletedTask;
+            }, CancellationToken.None);
+
+            GitLabConnected = _gitlab.IsConnected;
+            GitLabAccountLabel = _gitlab.AccountLogin is { } login ? $"Connected as {login}" : "Connected";
+            GitLabUserCode = string.Empty;
+            GitLabDeviceInstruction = string.Empty;
+            _ = _inboxService.RefreshAsync(CancellationToken.None);
+        }
+        catch (ProviderNotConfiguredException ex)
+        {
+            GitLabUserCode = string.Empty;
+            GitLabDeviceInstruction = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            GitLabUserCode = string.Empty;
+            GitLabDeviceInstruction = $"Connection failed: {ex.Message}";
+        }
+        finally
+        {
+            GitLabBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private void CopyGitLabCode()
+    {
+        if (string.IsNullOrEmpty(GitLabUserCode))
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(GitLabUserCode);
+        }
+        catch (Exception)
+        {
+            // Clipboard access can transiently fail; not worth surfacing.
+        }
+    }
+
+    [RelayCommand]
+    private void DisconnectGitLab()
+    {
+        _gitlab.Disconnect();
+        GitLabConnected = false;
+        GitLabAccountLabel = "Not connected";
+        GitLabUserCode = string.Empty;
+        GitLabDeviceInstruction = string.Empty;
         _ = _inboxService.RefreshAsync(CancellationToken.None);
     }
 
@@ -609,6 +690,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         BitbucketConnected = _bitbucket.IsConnected;
         BitbucketAccountLabel = _bitbucket.IsConnected
             ? (_bitbucket.AccountLogin is { } bbLogin ? $"Connected as {bbLogin}" : "Connected")
+            : "Not connected";
+
+        GitLabConnected = _gitlab.IsConnected;
+        GitLabAccountLabel = _gitlab.IsConnected
+            ? (_gitlab.AccountLogin is { } glLogin ? $"Connected as {glLogin}" : "Connected")
             : "Not connected";
 
         _loading = false;
