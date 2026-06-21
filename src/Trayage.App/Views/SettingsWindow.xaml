@@ -23,7 +23,8 @@
                     TabStripPlacement="Left"
                     Margin="12,4,12,12"
                     Background="Transparent"
-                    BorderThickness="0">
+                    BorderThickness="0"
+                    SelectionChanged="OnTabSelectionChanged">
 
             <!-- Accounts -->
             <TabItem Header="Accounts">
@@ -161,7 +162,7 @@
 
             <!-- Bitbucket: watched-repo picker. Bitbucket has no notification inbox, so the
                  repos chosen here are the ones Trayage actively queries for activity. -->
-            <TabItem Header="Bitbucket">
+            <TabItem Header="Bitbucket" x:Name="BitbucketTab">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
                     <StackPanel>
                         <TextBlock Text="Bitbucket repositories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
@@ -176,8 +177,9 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <ui:Button Grid.Column="0"
-                                       Content="Load my repositories"
+                                       Content="Refresh"
                                        Icon="{ui:SymbolIcon ArrowSync24}"
+                                       ToolTip="Reload your accessible Bitbucket repositories"
                                        Appearance="Primary"
                                        IsEnabled="{Binding BitbucketConnected}"
                                        Command="{Binding LoadBitbucketReposCommand}"
