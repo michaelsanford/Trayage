@@ -109,10 +109,59 @@
                         </ui:CardControl>
                         <TextBlock Text="{Binding BitbucketStatus}"
                                    TextWrapping="Wrap"
-                                   Margin="4,0,0,0"
+                                   Margin="4,0,0,16"
                                    FontSize="12"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Visibility="{Binding BitbucketStatus, Converter={StaticResource EmptyStringToCollapsed}}" />
+
+                        <ui:CardControl Margin="0,0,0,4">
+                            <ui:CardControl.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource GitLabMarkGeometry}"
+                                          Fill="{StaticResource GitLabOrangeBrush}"
+                                          Stretch="Uniform" Width="22" Height="22"
+                                          VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="GitLab" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding GitLabAccountLabel}"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button Content="Connect"
+                                           Appearance="Primary"
+                                           Command="{Binding ConnectGitLabCommand}"
+                                           IsEnabled="{Binding GitLabBusy, Converter={StaticResource InverseBool}}"
+                                           Visibility="{Binding GitLabConnected, Converter={StaticResource InverseBoolToVisibility}}" />
+                                <ui:Button Content="Disconnect"
+                                           Command="{Binding DisconnectGitLabCommand}"
+                                           Visibility="{Binding GitLabConnected, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                        </ui:CardControl>
+
+                        <StackPanel Margin="4,0,0,0"
+                                    Visibility="{Binding GitLabDeviceInstruction, Converter={StaticResource EmptyStringToCollapsed}}">
+                            <TextBlock Text="{Binding GitLabDeviceInstruction}"
+                                       TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Orientation="Horizontal"
+                                        Margin="0,8,0,0"
+                                        Visibility="{Binding GitLabUserCode, Converter={StaticResource EmptyStringToCollapsed}}">
+                                <ui:TextBox Text="{Binding GitLabUserCode, Mode=OneWay}"
+                                            IsReadOnly="True"
+                                            FontFamily="Cascadia Mono, Consolas, monospace"
+                                            FontSize="18"
+                                            MinWidth="150"
+                                            VerticalContentAlignment="Center" />
+                                <ui:Button Content="Copy"
+                                           Icon="{ui:SymbolIcon Copy24}"
+                                           Margin="8,0,0,0"
+                                           Command="{Binding CopyGitLabCodeCommand}" />
+                            </StackPanel>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

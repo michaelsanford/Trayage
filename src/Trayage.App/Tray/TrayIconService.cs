@@ -151,6 +151,14 @@ public sealed class TrayIconService : NotifyIconService
             InboxItemKind.ReviewRequest, InboxItemKind.Assignment, InboxItemKind.RepoActivity,
         }));
 
+        // GitLab to-dos cover every kind via their action_name (assigned, review/approval,
+        // mention, build_failed, plus general participation).
+        inject.Items.Add(BuildProviderMenu(ProviderKind.GitLab, new[]
+        {
+            InboxItemKind.ReviewRequest, InboxItemKind.Mention, InboxItemKind.Assignment,
+            InboxItemKind.CiStatus, InboxItemKind.Participating,
+        }));
+
         return inject;
     }
 

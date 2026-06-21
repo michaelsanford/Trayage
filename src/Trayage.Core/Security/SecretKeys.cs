@@ -7,4 +7,7 @@ public static class SecretKeys
 
     public const string BitbucketAccessToken = "bitbucket.access_token";
     public const string BitbucketRefreshToken = "bitbucket.refresh_token";
+
+    public const string GitLabAccessToken = "gitlab.access_token";
+    public const string GitLabRefreshToken = "gitlab.refresh_token";
 }

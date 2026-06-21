@@ -18,9 +18,9 @@
 [![SBOM](https://img.shields.io/badge/SBOM-CycloneDX-blueviolet)](#verifying-a-release)
 [![Signed](https://img.shields.io/badge/signed-cosign-2ea44f?logo=sigstore&logoColor=white)](#verifying-a-release)
 
-A .NET 10 Windows system-tray app that gathers your **GitHub** and **Bitbucket Cloud**
-activity into one unified inbox, lets you jump straight to the relevant page with a
-click, and raises native Windows toast notifications for the things you care about.
+A .NET 10 Windows system-tray app that gathers your **GitHub**, **Bitbucket Cloud**, and
+**GitLab.com** activity into one unified inbox, lets you jump straight to the relevant page
+with a click, and raises native Windows toast notifications for the things you care about.
 
 Trayage is the successor to [bittray](https://github.com/michaelsanford/bittray) — a Go
 tray app that watched Bitbucket Server for pull requests needing review. Trayage modernises
@@ -50,6 +50,9 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
     where you're a reviewer, and all activity in watched repos. Because Bitbucket has no
     notification inbox, the **Bitbucket** settings tab lets you load the repositories you
     can access and toggle the ones to watch (no need to type `owner/repo` by hand).
+  - **GitLab.com** via the to-do API — assignments, mentions, review/approval requests,
+    failed pipelines, and other to-dos. Like GitHub, GitLab has a centralized server-side
+    inbox, so there's nothing to configure per-repository.
 - **Native toast notifications** with per-class toggles (review requests, mentions &
   assignments, CI/check status) plus **all activity on repositories you choose to watch**.
   Clicking a toast opens the page. Toasts use the Windows App SDK and require the
@@ -106,7 +109,8 @@ Register one OAuth app per provider (once), then drop the identifiers into a git
 ```json
 {
   "GitHub": { "ClientId": "Ov23li…" },
-  "Bitbucket": { "Key": "…", "Secret": "…" }
+  "Bitbucket": { "Key": "…", "Secret": "…" },
+  "GitLab": { "ApplicationId": "…" }
 }
 ```
 
@@ -126,12 +130,17 @@ Register one OAuth app per provider (once), then drop the identifiers into a git
   carries the scopes it was **first authorized with**, so after changing consumer permissions
   you must **disconnect and reconnect** (a refresh keeps the old scopes) for the new ones to
   take effect.
+- **GitLab.com** — *Preferences → Applications → Add new application.* Leave **Confidential**
+  **unchecked** (Trayage is a public client using the OAuth device flow), tick the **read_api**
+  scope, and copy the **Application ID**. The device flow needs **no redirect URI** and no
+  secret.
 
 | Provider UI field | Config key | Release secret |
 | --- | --- | --- |
 | GitHub **Client ID** | `GitHub:ClientId` | `GH_OAUTH_CLIENT_ID` |
 | Bitbucket **Client ID** / **Key** | `Bitbucket:Key` | `BITBUCKET_OAUTH_KEY` |
 | Bitbucket **Secret** | `Bitbucket:Secret` | `BITBUCKET_OAUTH_SECRET` |
+| GitLab **Application ID** | `GitLab:ApplicationId` | `GITLAB_OAUTH_APP_ID` |
 
 Releases inject these in CI from repository **secrets** (right column). The Bitbucket secret
 ships embedded in the binary, so it isn't truly confidential — treat it as a public
@@ -204,7 +213,7 @@ cosign verify-blob `
 | Project | Responsibility |
 | --- | --- |
 | `Trayage.App` | WPF + WPF-UI shell: tray icon, inbox flyout, Settings window, toast notifier, host/DI |
-| `Trayage.Core` | Provider abstraction, inbox aggregation & diffing, polling, notification rules, settings, DPAPI secret store, GitHub & Bitbucket providers |
+| `Trayage.Core` | Provider abstraction, inbox aggregation & diffing, polling, notification rules, settings, DPAPI secret store, GitHub, Bitbucket & GitLab providers |
 | `Trayage.Core.Tests` | xUnit tests for the inbox/notification/settings/secret-store logic |
 
 Providers implement `IInboxProvider` and translate their native payloads into a shared

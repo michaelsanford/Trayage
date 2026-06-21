@@ -148,6 +148,9 @@
                                                     <DataTrigger Binding="{Binding Provider}" Value="Bitbucket">
                                                         <Setter Property="Background" Value="{StaticResource BitbucketBlueBrush}" />
                                                     </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Provider}" Value="GitLab">
+                                                        <Setter Property="Background" Value="{StaticResource GitLabOrangeBrush}" />
+                                                    </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </Border.Style>
@@ -157,6 +160,9 @@
                                                     <Setter Property="Foreground" Value="{DynamicResource ApplicationBackgroundBrush}" />
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Provider}" Value="Bitbucket">
+                                                            <Setter Property="Foreground" Value="{StaticResource ProviderBadgeGlyphBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Provider}" Value="GitLab">
                                                             <Setter Property="Foreground" Value="{StaticResource ProviderBadgeGlyphBrush}" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -180,6 +186,10 @@
                                                         <DataTrigger Binding="{Binding Provider}" Value="Bitbucket">
                                                             <Setter Property="Data" Value="{StaticResource BitbucketMarkGeometry}" />
                                                             <Setter Property="Fill" Value="{StaticResource BitbucketBlueBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Provider}" Value="GitLab">
+                                                            <Setter Property="Data" Value="{StaticResource GitLabMarkGeometry}" />
+                                                            <Setter Property="Fill" Value="{StaticResource GitLabOrangeBrush}" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>

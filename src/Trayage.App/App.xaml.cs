@@ -328,9 +328,12 @@ public partial class App : Application
 
     private static Trayage.Core.Models.InboxItem SampleItem(Trayage.Core.Models.ProviderKind provider, Trayage.Core.Models.InboxItemKind kind)
     {
-        var webUrl = provider == Trayage.Core.Models.ProviderKind.Bitbucket
-            ? "https://bitbucket.org/michaelsanford/trayage/pull-requests/1"
-            : "https://github.com/michaelsanford/Trayage/pull/1";
+        var webUrl = provider switch
+        {
+            Trayage.Core.Models.ProviderKind.Bitbucket => "https://bitbucket.org/michaelsanford/trayage/pull-requests/1",
+            Trayage.Core.Models.ProviderKind.GitLab => "https://gitlab.com/michaelsanford/trayage/-/merge_requests/1",
+            _ => "https://github.com/michaelsanford/Trayage/pull/1",
+        };
 
         return new()
         {

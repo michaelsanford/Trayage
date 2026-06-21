@@ -9,6 +9,7 @@ using Trayage.Core.Inbox;
 using Trayage.Core.Notifications;
 using Trayage.Core.Providers.Bitbucket;
 using Trayage.Core.Providers.GitHub;
+using Trayage.Core.Providers.GitLab;
 using Trayage.Core.Security;
 
 namespace Trayage.App;
@@ -46,6 +47,10 @@ internal static class ServiceRegistration
         builder.Services.Configure<BitbucketOptions>(builder.Configuration.GetSection(BitbucketOptions.SectionName));
         builder.Services.AddSingleton<BitbucketProvider>();
         builder.Services.AddSingleton<IInboxProvider>(sp => sp.GetRequiredService<BitbucketProvider>());
+
+        builder.Services.Configure<GitLabOptions>(builder.Configuration.GetSection(GitLabOptions.SectionName));
+        builder.Services.AddSingleton<GitLabProvider>();
+        builder.Services.AddSingleton<IInboxProvider>(sp => sp.GetRequiredService<GitLabProvider>());
 
         // UI / shell (Phase 1, 4 & 6)
         builder.Services.AddSingleton<TrayIconService>();
