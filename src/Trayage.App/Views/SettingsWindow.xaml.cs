@@ -36,6 +36,24 @@ public partial class SettingsWindow : FluentWindow
         Focus();
     }
 
+    // Lazily discover Bitbucket repositories the first time that tab is opened (while connected),
+    // so the picker fills itself instead of needing an explicit "load" click. The result is cached
+    // for the window's lifetime; the in-pane Refresh button reloads on demand.
+    private void OnTabSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        // TabControl.SelectionChanged also bubbles up from ComboBoxes inside the tabs; only act on
+        // the TabControl's own selection change.
+        if (e.OriginalSource is not System.Windows.Controls.TabControl tabControl)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(tabControl.SelectedItem, BitbucketTab))
+        {
+            (DataContext as SettingsViewModel)?.EnsureBitbucketReposLoaded();
+        }
+    }
+
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         // Keep the single instance alive for the app's lifetime; hide instead of close —

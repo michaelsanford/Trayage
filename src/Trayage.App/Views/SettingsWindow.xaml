@@ -23,7 +23,8 @@
                     TabStripPlacement="Left"
                     Margin="12,4,12,12"
                     Background="Transparent"
-                    BorderThickness="0">
+                    BorderThickness="0"
+                    SelectionChanged="OnTabSelectionChanged">
 
             <!-- Accounts -->
             <TabItem Header="Accounts">
@@ -33,11 +34,17 @@
 
                         <ui:CardControl Margin="0,0,0,12">
                             <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="GitHub" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding GitHubAccountLabel}"
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource GitHubMarkGeometry}"
+                                          Fill="{DynamicResource TextFillColorPrimaryBrush}"
+                                          Stretch="Uniform" Width="22" Height="22"
+                                          VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="GitHub" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding GitHubAccountLabel}"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
                                 </StackPanel>
                             </ui:CardControl.Header>
                             <StackPanel Orientation="Horizontal">
@@ -76,11 +83,17 @@
 
                         <ui:CardControl Margin="0,0,0,4">
                             <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Bitbucket Cloud" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding BitbucketAccountLabel}"
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource BitbucketMarkGeometry}"
+                                          Fill="{StaticResource BitbucketBlueBrush}"
+                                          Stretch="Uniform" Width="22" Height="22"
+                                          VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Bitbucket Cloud" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding BitbucketAccountLabel}"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
                                 </StackPanel>
                             </ui:CardControl.Header>
                             <StackPanel Orientation="Horizontal">
@@ -149,7 +162,7 @@
 
             <!-- Bitbucket: watched-repo picker. Bitbucket has no notification inbox, so the
                  repos chosen here are the ones Trayage actively queries for activity. -->
-            <TabItem Header="Bitbucket">
+            <TabItem Header="Bitbucket" x:Name="BitbucketTab">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
                     <StackPanel>
                         <TextBlock Text="Bitbucket repositories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
@@ -164,8 +177,9 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <ui:Button Grid.Column="0"
-                                       Content="Load my repositories"
+                                       Content="Refresh"
                                        Icon="{ui:SymbolIcon ArrowSync24}"
+                                       ToolTip="Reload your accessible Bitbucket repositories"
                                        Appearance="Primary"
                                        IsEnabled="{Binding BitbucketConnected}"
                                        Command="{Binding LoadBitbucketReposCommand}"
@@ -212,22 +226,30 @@
                             </ItemsControl.GroupStyle>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <ui:CardControl Margin="0,0,0,6">
-                                        <ui:CardControl.Header>
-                                            <StackPanel>
-                                                <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
-                                                <TextBlock Text="{Binding FullName}"
-                                                           FontSize="12"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                            </StackPanel>
-                                        </ui:CardControl.Header>
-                                        <ui:ToggleSwitch IsChecked="{Binding IsWatched}" />
-                                    </ui:CardControl>
+                                    <!-- Compact one-line row (workspace is already the group header),
+                                         so large accounts list densely instead of a wall of cards. -->
+                                    <Grid Margin="0,3,0,3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding DisplayName}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding FullName}" />
+                                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding IsWatched}" />
+                                    </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <TextBlock Text="Add a repository manually" FontWeight="SemiBold" Margin="0,0,0,8" />
+                        <TextBlock Text="Add a repository manually" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="For a repository the loader can't reach. It's added to the watched list above (toggle it off there to stop watching)."
+                                   TextWrapping="Wrap"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,8" />
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -247,23 +269,6 @@
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,12"
                                    Visibility="{Binding WatchedRepoError, Converter={StaticResource EmptyStringToCollapsed}}" />
-
-                        <ItemsControl ItemsSource="{Binding WatchedRepositories}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <ui:CardControl Margin="0,0,0,6">
-                                        <ui:CardControl.Header>
-                                            <TextBlock Text="{Binding}" VerticalAlignment="Center" />
-                                        </ui:CardControl.Header>
-                                        <ui:Button Icon="{ui:SymbolIcon Delete24}"
-                                                   Appearance="Secondary"
-                                                   ToolTip="Remove"
-                                                   Command="{Binding DataContext.RemoveWatchedRepoCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                   CommandParameter="{Binding}" />
-                                    </ui:CardControl>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

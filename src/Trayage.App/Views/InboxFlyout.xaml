@@ -32,7 +32,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#14FFFFFF" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -65,28 +65,32 @@
                     <ui:Button Appearance="Secondary"
                                Icon="{ui:SymbolIcon ArrowSync24}"
                                ToolTip="Refresh"
+                               AutomationProperties.Name="Refresh inbox"
                                Command="{Binding RefreshCommand}"
                                Margin="0,0,8,0" />
                     <ui:Button Appearance="Secondary"
                                Icon="{ui:SymbolIcon Settings24}"
                                ToolTip="Settings"
+                               AutomationProperties.Name="Open settings"
                                Command="{Binding OpenSettingsCommand}" />
                 </StackPanel>
             </Grid>
 
             <!-- Items -->
-            <ui:ProgressRing Grid.Row="1"
-                             IsIndeterminate="True"
-                             HorizontalAlignment="Center"
-                             VerticalAlignment="Center"
-                             Visibility="{Binding IsRefreshing, Converter={StaticResource BoolToVisibility}}" />
-
-            <TextBlock Grid.Row="1"
-                       Text="You're all caught up."
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+            <!-- Empty / caught-up state. -->
+            <StackPanel Grid.Row="1"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+                <ui:SymbolIcon Symbol="CheckmarkCircle24"
+                               FontSize="40"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                <TextBlock Text="You're all caught up."
+                           Margin="0,8,0,0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
 
             <ListView Grid.Row="1"
                       ItemsSource="{Binding ItemsView}"
@@ -102,8 +106,9 @@
                                 <TextBlock Text="{Binding Name}"
                                            FontFamily="Cascadia Mono, Consolas, monospace"
                                            FontSize="11"
+                                           FontWeight="SemiBold"
                                            Margin="6,12,0,4"
-                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                             </DataTemplate>
                         </GroupStyle.HeaderTemplate>
                     </GroupStyle>
@@ -127,18 +132,61 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <!-- Kind badge -->
-                                <Border Grid.Column="0"
-                                        Width="28" Height="28" CornerRadius="7"
-                                        Margin="0,1,10,0"
-                                        VerticalAlignment="Top"
-                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                        BorderThickness="1">
-                                    <ui:SymbolIcon Symbol="{Binding KindIcon}"
-                                                   FontSize="15"
-                                                   Foreground="#F1B24A" />
-                                </Border>
+                                <!-- Kind + provider badge: a filled shape coloured by provider
+                                     (neutral = GitHub, blue = Bitbucket) holds contrast in both
+                                     themes and encodes the source; the glyph shows the kind, and a
+                                     small corner mark carries the actual provider logo. -->
+                                <Grid Grid.Column="0"
+                                      Width="28" Height="28"
+                                      Margin="0,1,10,0"
+                                      VerticalAlignment="Top">
+                                    <Border CornerRadius="7">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Provider}" Value="Bitbucket">
+                                                        <Setter Property="Background" Value="{StaticResource BitbucketBlueBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <ui:SymbolIcon Symbol="{Binding KindIcon}" FontSize="14">
+                                            <ui:SymbolIcon.Style>
+                                                <Style TargetType="{x:Type ui:SymbolIcon}">
+                                                    <Setter Property="Foreground" Value="{DynamicResource ApplicationBackgroundBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Provider}" Value="Bitbucket">
+                                                            <Setter Property="Foreground" Value="{StaticResource ProviderBadgeGlyphBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ui:SymbolIcon.Style>
+                                        </ui:SymbolIcon>
+                                    </Border>
+
+                                    <!-- Corner provider chip (real brand mark). -->
+                                    <Border Width="14" Height="14" CornerRadius="7"
+                                            HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                            Margin="0,0,-3,-3"
+                                            Background="{DynamicResource ApplicationBackgroundBrush}">
+                                        <Path Stretch="Uniform" Width="9" Height="9"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Path.Style>
+                                                <Style TargetType="Path">
+                                                    <Setter Property="Data" Value="{StaticResource GitHubMarkGeometry}" />
+                                                    <Setter Property="Fill" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Provider}" Value="Bitbucket">
+                                                            <Setter Property="Data" Value="{StaticResource BitbucketMarkGeometry}" />
+                                                            <Setter Property="Fill" Value="{StaticResource BitbucketBlueBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Path.Style>
+                                        </Path>
+                                    </Border>
+                                </Grid>
 
                                 <!-- Title + subtitle -->
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
@@ -168,7 +216,7 @@
                                 <!-- Unread dot -->
                                 <Ellipse Grid.Column="2"
                                          Width="9" Height="9"
-                                         Fill="#E5484D"
+                                         Fill="{StaticResource TrayageUnreadBrush}"
                                          VerticalAlignment="Center"
                                          Margin="10,0,2,0"
                                          Visibility="{Binding IsUnread, Converter={StaticResource BoolToVisibility}}">
@@ -181,6 +229,16 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
+
+            <!-- Refresh affordance: a slim indeterminate bar pinned to the top of the list,
+                 so an in-flight refresh never blanks the items already shown. -->
+            <ProgressBar Grid.Row="1"
+                         IsIndeterminate="True"
+                         Height="2"
+                         VerticalAlignment="Top"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Visibility="{Binding IsRefreshing, Converter={StaticResource BoolToVisibility}}" />
 
             <!-- Footer -->
             <TextBlock Grid.Row="2"

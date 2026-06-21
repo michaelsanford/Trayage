@@ -103,6 +103,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _populatingRepos;
     private ICollectionView? _bitbucketRepoView;
 
+    // Set once the Bitbucket tab has triggered an automatic discovery load, so revisiting the
+    // tab doesn't re-hit the API; manual "Refresh" always reloads regardless.
+    private bool _reposAutoLoaded;
+
     public SettingsViewModel(ISettingsStore settings, GitHubProvider gitHub, BitbucketProvider bitbucket, InboxService inboxService, IToastNotifier notifier)
     {
         _settings = settings;
@@ -291,6 +295,25 @@ public sealed partial class SettingsViewModel : ObservableObject
         BitbucketAccountLabel = "Not connected";
         BitbucketStatus = string.Empty;
         _ = _inboxService.RefreshAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Triggers a one-time automatic repository discovery the first time the Bitbucket tab is
+    /// shown while connected. Subsequent tab visits are no-ops (the result is cached for the
+    /// window's lifetime); the manual "Refresh" button reloads on demand.
+    /// </summary>
+    public void EnsureBitbucketReposLoaded()
+    {
+        if (_reposAutoLoaded || !BitbucketConnected || IsLoadingRepos)
+        {
+            return;
+        }
+
+        _reposAutoLoaded = true;
+        if (LoadBitbucketReposCommand.CanExecute(null))
+        {
+            LoadBitbucketReposCommand.Execute(null);
+        }
     }
 
     [RelayCommand]
@@ -565,6 +588,18 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             WatchedRepositories.Add(repo);
         }
+
+        // Seed the picker with the already-watched repos (pre-checked) so they're visible as
+        // one unified list before "Load my repositories" is clicked. Loading later clears and
+        // re-adds discovered repos plus any watched ones it didn't return, so this never double-ups.
+        _populatingRepos = true;
+        BitbucketRepoOptions.Clear();
+        foreach (var repo in WatchedRepositories)
+        {
+            BitbucketRepoOptions.Add(NewOption(repo, repo, isWatched: true));
+        }
+
+        _populatingRepos = false;
 
         GitHubConnected = _gitHub.IsConnected;
         GitHubAccountLabel = _gitHub.IsConnected
