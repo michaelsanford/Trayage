@@ -30,7 +30,30 @@ public sealed class InboxItemViewModel
 
     public DateTimeOffset UpdatedAt => Item.UpdatedAt;
 
+    public ProviderKind Provider => Item.Provider;
+
     public string ProviderLabel => Item.Provider == ProviderKind.GitHub ? "GitHub" : "Bitbucket";
+
+    /// <summary>
+    /// Coarse recency bucket used to group the flat (non-repo) list. Returned in newest-first
+    /// order naturally because the view also sorts by <see cref="UpdatedAt"/> descending.
+    /// </summary>
+    public string TimeBucket
+    {
+        get
+        {
+            var today = DateTimeOffset.Now.Date;
+            var when = Item.UpdatedAt.ToLocalTime().Date;
+            var days = (today - when).Days;
+            return days switch
+            {
+                <= 0 => "Today",
+                1 => "Yesterday",
+                < 7 => "Earlier this week",
+                _ => "Older",
+            };
+        }
+    }
 
     public string KindLabel => Item.Kind switch
     {

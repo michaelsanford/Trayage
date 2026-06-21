@@ -161,8 +161,10 @@ public sealed partial class InboxViewModel : ObservableObject
                 }
                 else
                 {
-                    // Flat list: newest first.
+                    // Flat list: newest first, grouped under Today / Yesterday / … recency headers.
+                    // Sorting by UpdatedAt descending also fixes the order the buckets appear in.
                     ItemsView.SortDescriptions.Add(new SortDescription(nameof(InboxItemViewModel.UpdatedAt), ListSortDirection.Descending));
+                    ItemsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(InboxItemViewModel.TimeBucket)));
                 }
             }
 

@@ -566,6 +566,18 @@ public sealed partial class SettingsViewModel : ObservableObject
             WatchedRepositories.Add(repo);
         }
 
+        // Seed the picker with the already-watched repos (pre-checked) so they're visible as
+        // one unified list before "Load my repositories" is clicked. Loading later clears and
+        // re-adds discovered repos plus any watched ones it didn't return, so this never double-ups.
+        _populatingRepos = true;
+        BitbucketRepoOptions.Clear();
+        foreach (var repo in WatchedRepositories)
+        {
+            BitbucketRepoOptions.Add(NewOption(repo, repo, isWatched: true));
+        }
+
+        _populatingRepos = false;
+
         GitHubConnected = _gitHub.IsConnected;
         GitHubAccountLabel = _gitHub.IsConnected
             ? (_gitHub.AccountLogin is { } login ? $"Connected as {login}" : "Connected")

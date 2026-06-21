@@ -1,0 +1,19 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Centralised Trayage colors. Theme-varying surfaces use Fluent's DynamicResource
+         brushes directly in the views; these are the fixed brand/state colors that read on
+         both light and dark backgrounds. -->
+
+    <!-- Bitbucket brand blue: legible filled against both the light (near-white) and dark
+         flyout backgrounds, so a white glyph on top stays high-contrast in either theme. -->
+    <SolidColorBrush x:Key="BitbucketBlueBrush" Color="#2684FF" />
+
+    <!-- Unread indicator dot (was an inline #E5484D in the flyout). -->
+    <SolidColorBrush x:Key="TrayageUnreadBrush" Color="#E5484D" />
+
+    <!-- Glyph color for filled provider badges; near-white reads on both the GitHub
+         (theme-foreground) and Bitbucket (blue) fills. -->
+    <SolidColorBrush x:Key="ProviderBadgeGlyphBrush" Color="#FFFFFF" />
+
+</ResourceDictionary>
