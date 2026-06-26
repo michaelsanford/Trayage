@@ -1,3 +1,7 @@
+// ReSharper disable ClassNeverInstantiated.Global
+// ReSharper disable CollectionNeverUpdated.Global
+// ReSharper disable UnusedAutoPropertyAccessor.Global
+
 using System.Text.Json.Serialization;
 
 namespace Trayage.Core.Providers.Bitbucket;
