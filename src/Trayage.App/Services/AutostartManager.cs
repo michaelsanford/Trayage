@@ -22,10 +22,6 @@ public static class AutostartManager
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true)
                         ?? Registry.CurrentUser.CreateSubKey(RunKeyPath);
-        if (key is null)
-        {
-            return;
-        }
 
         if (enabled)
         {
