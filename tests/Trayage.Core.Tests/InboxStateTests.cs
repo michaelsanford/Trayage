@@ -1,5 +1,4 @@
 using Trayage.Core.Inbox;
-using Trayage.Core.Models;
 
 namespace Trayage.Core.Tests;
 

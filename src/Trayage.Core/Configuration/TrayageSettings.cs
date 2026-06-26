@@ -77,16 +77,16 @@ public sealed class TrayageSettings
     /// </summary>
     public bool SurfaceRecentlyModified { get; set; } = true;
 
-    public NotificationSettings Notifications { get; set; } = new();
+    public NotificationSettings Notifications { get; init; } = new();
 
     /// <summary>"owner/repo" names to surface and toast on for all activity.</summary>
-    public List<string> WatchedRepositories { get; set; } = new();
+    public List<string> WatchedRepositories { get; init; } = new();
 
-    public ProviderConnectionState GitHub { get; set; } = new();
+    public ProviderConnectionState GitHub { get; init; } = new();
 
-    public ProviderConnectionState Bitbucket { get; set; } = new();
+    public ProviderConnectionState Bitbucket { get; init; } = new();
 
-    public ProviderConnectionState GitLab { get; set; } = new();
+    public ProviderConnectionState GitLab { get; init; } = new();
 
     /// <summary>
     /// Deep copy. Lets the settings store cache one canonical instance yet hand callers

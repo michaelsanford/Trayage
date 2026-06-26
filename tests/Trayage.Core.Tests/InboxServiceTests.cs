@@ -74,16 +74,17 @@ public sealed class InboxServiceTests
     public async Task RefreshAsync_CancellationRequested_RethrowsOperationCanceled()
     {
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
+        var token = cts.Token;
 
         var provider = Substitute.For<IInboxProvider>();
         provider.Provider.Returns(ProviderKind.GitHub);
         provider.IsConnected.Returns(true);
         provider.FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>())
-            .Returns<Task<IReadOnlyList<InboxItem>>>(_ => throw new OperationCanceledException(cts.Token));
+            .Returns<Task<IReadOnlyList<InboxItem>>>(_ => throw new OperationCanceledException(token));
 
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => NewService(provider).RefreshAsync(cts.Token));
+            () => NewService(provider).RefreshAsync(token));
     }
 
     [Fact]

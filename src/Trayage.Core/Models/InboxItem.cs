@@ -53,6 +53,7 @@ public sealed record InboxItem
     public required string RepositoryFullName { get; init; }
 
     /// <summary>Human-readable reason this item is in your inbox (e.g. "review_requested").</summary>
+    // ReSharper disable once UnusedAutoPropertyAccessor.Global
     public string Reason { get; init; } = string.Empty;
 
     /// <summary>The page to open in the browser when the item is clicked.</summary>

@@ -37,7 +37,7 @@ public sealed partial class InboxViewModel : ObservableObject
     /// <summary>Raised when the user clicks the settings button in the flyout.</summary>
     public event Action? OpenSettingsRequested;
 
-    public ObservableCollection<InboxItemViewModel> Items { get; } = new();
+    private ObservableCollection<InboxItemViewModel> Items { get; } = new();
 
     /// <summary>Grouped/sorted view the flyout binds to; shaped by the display settings.</summary>
     public ICollectionView ItemsView { get; }

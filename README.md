@@ -7,6 +7,7 @@
 [![Coverage](https://img.shields.io/badge/coverage-report-blue)](https://github.com/michaelsanford/Trayage/actions/workflows/ci.yml)
 [![PowerShell Lint](https://github.com/michaelsanford/Trayage/actions/workflows/powershell.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/powershell.yml)
 [![CodeQL](https://github.com/michaelsanford/Trayage/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/github-code-scanning/codeql)
+[![Qodana](https://github.com/michaelsanford/Trayage/actions/workflows/qodana_code_quality.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/qodana_code_quality.yml)
 [![Release](https://github.com/michaelsanford/Trayage/actions/workflows/release.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/release.yml)
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)

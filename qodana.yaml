@@ -9,3 +9,19 @@ profile:
   name: qodana.recommended
 include:
   - name: CheckDependencyLicenses
+exclude:
+  - name: Xaml.BindingWithContextNotResolved
+  - name: Xaml.BindingWithoutContextNotResolved
+  - name: XmlHighlighting
+    paths:
+      - src/Trayage.App/app.manifest
+  - name: MemberCanBePrivate.Global
+    paths:
+      - src/Trayage.App/ViewModels/InboxViewModel.cs
+      - src/Trayage.App/ViewModels/SettingsViewModel.cs
+      - src/Trayage.App/ViewModels/InboxItemViewModel.cs
+  - name: UnusedMember.Global
+    paths:
+      - src/Trayage.App/ViewModels/InboxItemViewModel.cs
+      - src/Trayage.App/ViewModels/SettingsViewModel.cs
+      - src/Trayage.Core/Configuration/ISettingsStore.cs

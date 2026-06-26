@@ -20,11 +20,6 @@ public sealed class InboxAggregator
 
         foreach (var result in providerResults)
         {
-            if (result is null)
-            {
-                continue;
-            }
-
             foreach (var item in result)
             {
                 if (!byKey.TryGetValue(item.Key, out var existing) || item.UpdatedAt > existing.UpdatedAt)

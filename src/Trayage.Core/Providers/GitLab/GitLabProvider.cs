@@ -166,10 +166,8 @@ public sealed class GitLabProvider : IInboxProvider
         };
 
         var client = _httpClientFactory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, DeviceAuthEndpoint)
-        {
-            Content = new FormUrlEncodedContent(form),
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, DeviceAuthEndpoint);
+        request.Content = new FormUrlEncodedContent(form);
 
         using var response = await client.SendAsync(request, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
@@ -200,7 +198,7 @@ public sealed class GitLabProvider : IInboxProvider
 
             if (status == HttpStatusCode.OK && !string.IsNullOrEmpty(token?.AccessToken))
             {
-                return token!;
+                return token;
             }
 
             switch (token?.Error)
@@ -228,10 +226,8 @@ public sealed class GitLabProvider : IInboxProvider
     private async Task<(HttpStatusCode Status, GitLabTokenResponse? Token)> PostTokenFormAsync(Dictionary<string, string> form, CancellationToken ct)
     {
         var client = _httpClientFactory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, TokenEndpoint)
-        {
-            Content = new FormUrlEncodedContent(form),
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, TokenEndpoint);
+        request.Content = new FormUrlEncodedContent(form);
 
         using var response = await client.SendAsync(request, ct).ConfigureAwait(false);
         await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
@@ -277,7 +273,7 @@ public sealed class GitLabProvider : IInboxProvider
                 return null;
             }
 
-            StoreTokens(token!);
+            StoreTokens(token);
             return _accessToken;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

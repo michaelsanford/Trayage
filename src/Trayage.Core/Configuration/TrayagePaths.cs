@@ -6,10 +6,10 @@ namespace Trayage.Core.Configuration;
 /// </summary>
 public static class TrayagePaths
 {
-    public const string AppFolderName = "Trayage";
+    private const string AppFolderName = "Trayage";
 
     /// <summary>%APPDATA%\Trayage, created on first access.</summary>
-    public static string DataDirectory
+    private static string DataDirectory
     {
         get
         {

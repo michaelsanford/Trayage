@@ -19,7 +19,7 @@ public sealed class InboxState
     /// <summary>Raised after the snapshot is replaced. May fire on a background thread.</summary>
     public event EventHandler? Changed;
 
-    public void Set(IReadOnlyList<InboxItem> items)
+    public void Set(IReadOnlyList<InboxItem>? items)
     {
         _items = items ?? Array.Empty<InboxItem>();
         Changed?.Invoke(this, EventArgs.Empty);

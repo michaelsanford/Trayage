@@ -1,3 +1,7 @@
+// ReSharper disable ClassNeverInstantiated.Global
+// ReSharper disable CollectionNeverUpdated.Global
+// ReSharper disable UnusedAutoPropertyAccessor.Global
+
 using System.Text.Json.Serialization;
 
 namespace Trayage.Core.Providers.GitLab;
@@ -6,22 +10,22 @@ namespace Trayage.Core.Providers.GitLab;
 public sealed class GitLabDeviceAuthResponse
 {
     [JsonPropertyName("device_code")]
-    public string? DeviceCode { get; set; }
+    public string? DeviceCode { get; init; }
 
     [JsonPropertyName("user_code")]
-    public string? UserCode { get; set; }
+    public string? UserCode { get; init; }
 
     [JsonPropertyName("verification_uri")]
-    public string? VerificationUri { get; set; }
+    public string? VerificationUri { get; init; }
 
     [JsonPropertyName("verification_uri_complete")]
-    public string? VerificationUriComplete { get; set; }
+    public string? VerificationUriComplete { get; init; }
 
     [JsonPropertyName("expires_in")]
-    public int ExpiresIn { get; set; }
+    public int ExpiresIn { get; init; }
 
     [JsonPropertyName("interval")]
-    public int Interval { get; set; }
+    public int Interval { get; init; }
 }
 
 /// <summary>
@@ -32,70 +36,70 @@ public sealed class GitLabDeviceAuthResponse
 public sealed class GitLabTokenResponse
 {
     [JsonPropertyName("access_token")]
-    public string? AccessToken { get; set; }
+    public string? AccessToken { get; init; }
 
     [JsonPropertyName("refresh_token")]
-    public string? RefreshToken { get; set; }
+    public string? RefreshToken { get; init; }
 
     [JsonPropertyName("expires_in")]
-    public int ExpiresIn { get; set; }
+    public int ExpiresIn { get; init; }
 
     [JsonPropertyName("token_type")]
-    public string? TokenType { get; set; }
+    public string? TokenType { get; init; }
 
     [JsonPropertyName("error")]
-    public string? Error { get; set; }
+    public string? Error { get; init; }
 
     [JsonPropertyName("error_description")]
-    public string? ErrorDescription { get; set; }
+    public string? ErrorDescription { get; init; }
 }
 
 /// <summary>The authenticated user (<c>GET /api/v4/user</c>); only the username is used.</summary>
 public sealed class GitLabUser
 {
     [JsonPropertyName("username")]
-    public string? Username { get; set; }
+    public string? Username { get; init; }
 }
 
 /// <summary>A single to-do from <c>GET /api/v4/todos</c>.</summary>
 public sealed class GitLabTodo
 {
     [JsonPropertyName("id")]
-    public long Id { get; set; }
+    public long Id { get; init; }
 
     [JsonPropertyName("action_name")]
-    public string? ActionName { get; set; }
+    public string? ActionName { get; init; }
 
     [JsonPropertyName("target_type")]
-    public string? TargetType { get; set; }
+    public string? TargetType { get; init; }
 
     [JsonPropertyName("target_url")]
-    public string? TargetUrl { get; set; }
+    public string? TargetUrl { get; init; }
 
     [JsonPropertyName("body")]
-    public string? Body { get; set; }
+    public string? Body { get; init; }
 
     [JsonPropertyName("state")]
-    public string? State { get; set; }
+    public string? State { get; init; }
 
     [JsonPropertyName("updated_at")]
-    public string? UpdatedAt { get; set; }
+    public string? UpdatedAt { get; init; }
 
     [JsonPropertyName("project")]
-    public GitLabProject? Project { get; set; }
+    public GitLabProject? Project { get; init; }
 
     [JsonPropertyName("target")]
-    public GitLabTarget? Target { get; set; }
+    public GitLabTarget? Target { get; init; }
 }
 
 public sealed class GitLabProject
 {
     [JsonPropertyName("path_with_namespace")]
-    public string? PathWithNamespace { get; set; }
+    public string? PathWithNamespace { get; init; }
 }
 
 public sealed class GitLabTarget
 {
     [JsonPropertyName("title")]
-    public string? Title { get; set; }
+    public string? Title { get; init; }
 }

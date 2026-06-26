@@ -8,42 +8,22 @@ namespace Trayage.App.Logging;
 /// A tiny append-only file logger. A tray WinExe has no console, so this gives us a
 /// durable record under %APPDATA%\Trayage\logs for diagnosing field issues.
 /// </summary>
-public sealed class FileLoggerProvider : ILoggerProvider
+public sealed partial class FileLoggerProvider(string filePath, LogLevel minLevel = LogLevel.Information) : ILoggerProvider
 {
-    private readonly string _filePath;
-    private readonly LogLevel _minLevel;
     private readonly object _gate = new();
 
-    public FileLoggerProvider(string filePath, LogLevel minLevel = LogLevel.Information)
-    {
-        _filePath = filePath;
-        _minLevel = minLevel;
-    }
-
-    public ILogger CreateLogger(string categoryName) => new FileLogger(categoryName, _filePath, _minLevel, _gate);
+    public ILogger CreateLogger(string categoryName) => new FileLogger(categoryName, filePath, minLevel, _gate);
 
     public void Dispose()
     {
     }
 
-    private sealed class FileLogger : ILogger
+    private sealed class FileLogger(string category, string filePath, LogLevel minLevel, object gate) : ILogger
     {
-        private readonly string _category;
-        private readonly string _filePath;
-        private readonly LogLevel _minLevel;
-        private readonly object _gate;
-
-        public FileLogger(string category, string filePath, LogLevel minLevel, object gate)
-        {
-            _category = category;
-            _filePath = filePath;
-            _minLevel = minLevel;
-            _gate = gate;
-        }
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-        public bool IsEnabled(LogLevel logLevel) => logLevel >= _minLevel;
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= minLevel;
 
         public void Log<TState>(
             LogLevel logLevel,
@@ -60,7 +40,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
             var builder = new StringBuilder()
                 .Append(DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"))
                 .Append(" [").Append(logLevel).Append("] ")
-                .Append(_category).Append(": ")
+                .Append(category).Append(": ")
                 .Append(formatter(state, exception));
 
             if (exception is not null)
@@ -70,20 +50,20 @@ public sealed class FileLoggerProvider : ILoggerProvider
 
             var line = builder.AppendLine().ToString();
 
-            lock (_gate)
+            lock (gate)
             {
                 try
                 {
-                    if (File.Exists(_filePath) && new FileInfo(_filePath).Length > 10 * 1024 * 1024)
+                    if (File.Exists(filePath) && new FileInfo(filePath).Length > 10 * 1024 * 1024)
                     {
-                        var backupPath = _filePath + ".1";
+                        var backupPath = filePath + ".1";
                         try
                         {
                             if (File.Exists(backupPath))
                             {
                                 File.Delete(backupPath);
                             }
-                            File.Move(_filePath, backupPath);
+                            File.Move(filePath, backupPath);
                         }
                         catch (IOException)
                         {
@@ -91,7 +71,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
                         }
                     }
 
-                    File.AppendAllText(_filePath, line);
+                    File.AppendAllText(filePath, line);
                 }
                 catch (IOException)
                 {

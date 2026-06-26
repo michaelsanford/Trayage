@@ -8,6 +8,7 @@ public sealed class InboxItemViewModel
 {
     private readonly bool _includeRepoInSubtitle;
 
+    /// <param name="item">The inbox item.</param>
     /// <param name="includeRepoInSubtitle">
     /// True when the list is flat (sequential), so the repository name is shown in the
     /// subtitle; false when grouped by repository (the group header already shows it).
@@ -30,15 +31,7 @@ public sealed class InboxItemViewModel
 
     public DateTimeOffset UpdatedAt => Item.UpdatedAt;
 
-    public ProviderKind Provider => Item.Provider;
 
-    public string ProviderLabel => Item.Provider switch
-    {
-        ProviderKind.GitHub => "GitHub",
-        ProviderKind.Bitbucket => "Bitbucket",
-        ProviderKind.GitLab => "GitLab",
-        _ => Item.Provider.ToString(),
-    };
 
     /// <summary>
     /// Coarse recency bucket used to group the flat (non-repo) list. Returned in newest-first

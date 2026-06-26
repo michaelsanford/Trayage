@@ -14,9 +14,12 @@ using Trayage.Core.Providers.Bitbucket;
 using Trayage.Core.Providers.GitHub;
 using Trayage.Core.Providers.GitLab;
 
+// ReSharper disable UnusedParameterInPartialMethod
+
 namespace Trayage.App.ViewModels;
 
 /// <summary>A selectable poll cadence: a display label and its value in seconds.</summary>
+// ReSharper disable once NotAccessedPositionalProperty.Global
 public sealed record PollIntervalOption(string Label, int Seconds);
 
 /// <summary>
@@ -109,7 +112,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     // Guards the IsWatched change handler while we populate the picker programmatically, so
     // pre-checking discovered repos doesn't re-persist or re-fetch.
     private bool _populatingRepos;
-    private ICollectionView? _bitbucketRepoView;
 
     // Set once the Bitbucket tab has triggered an automatic discovery load, so revisiting the
     // tab doesn't re-hit the API; manual "Refresh" always reloads regardless.
@@ -151,7 +153,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ObservableCollection<WatchedRepoOption> BitbucketRepoOptions { get; } = new();
 
     /// <summary>Name-filtered view over <see cref="BitbucketRepoOptions"/> for the search box.</summary>
-    public ICollectionView BitbucketRepoView => _bitbucketRepoView ??= CreateRepoView();
+    public ICollectionView BitbucketRepoView => field ??= CreateRepoView();
 
     private ICollectionView CreateRepoView()
     {
@@ -721,7 +723,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.Notifications.CiStatus = NotifyCi;
         s.Notifications.WatchedRepoActivity = NotifyWatchedRepoActivity;
         s.Notifications.Participating = NotifyParticipating;
-        s.WatchedRepositories = WatchedRepositories.ToList();
+        s.WatchedRepositories.Clear();
+        s.WatchedRepositories.AddRange(WatchedRepositories);
         _settings.Save(s);
     }
 }

@@ -17,15 +17,11 @@ namespace Trayage.App.Notifications;
 /// <see cref="AppNotificationManager.IsSupported"/> and silently no-op when the platform
 /// can't deliver them, so the tray app never throws on a machine without that runtime.
 /// </remarks>
-public sealed class WindowsToastNotifier : IToastNotifier
+public sealed class WindowsToastNotifier(ILogger<WindowsToastNotifier> logger) : IToastNotifier
 {
-    public const string ActionArgumentKey = "action";
-    public const string OpenAction = "open";
+    private const string ActionArgumentKey = "action";
+    private const string OpenAction = "open";
     public const string UrlArgumentKey = "url";
-
-    private readonly ILogger<WindowsToastNotifier> _logger;
-
-    public WindowsToastNotifier(ILogger<WindowsToastNotifier> logger) => _logger = logger;
 
     public bool IsAvailable => AppNotificationManager.IsSupported();
 
@@ -33,7 +29,7 @@ public sealed class WindowsToastNotifier : IToastNotifier
     {
         if (!IsAvailable)
         {
-            _logger.LogDebug("App notifications aren't supported on this system; skipping toast.");
+            logger.LogDebug("App notifications aren't supported on this system; skipping toast.");
             return;
         }
 
@@ -52,7 +48,7 @@ public sealed class WindowsToastNotifier : IToastNotifier
         catch (Exception ex)
         {
             // A failed toast must never take down the tray app.
-            _logger.LogWarning(ex, "Failed to show an app notification.");
+            logger.LogWarning(ex, "Failed to show an app notification.");
         }
     }
 

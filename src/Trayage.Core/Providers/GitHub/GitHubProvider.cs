@@ -67,7 +67,7 @@ public sealed class GitHubProvider : IInboxProvider
             request.Scopes.Add(scope);
         }
 
-        var device = await _client.Oauth.InitiateDeviceFlow(request).ConfigureAwait(false);
+        var device = await _client.Oauth.InitiateDeviceFlow(request, cancellationToken).ConfigureAwait(false);
 
         await onPromptReady(new DeviceCodePrompt(
             device.UserCode,
@@ -76,7 +76,7 @@ public sealed class GitHubProvider : IInboxProvider
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        var token = await _client.Oauth.CreateAccessTokenForDeviceFlow(_options.ClientId, device).ConfigureAwait(false);
+        var token = await _client.Oauth.CreateAccessTokenForDeviceFlow(_options.ClientId, device, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(token.AccessToken))
         {
             throw new InvalidOperationException("GitHub did not return an access token.");

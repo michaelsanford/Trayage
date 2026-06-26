@@ -19,8 +19,9 @@ public sealed class NotificationRuleEngine
     {
         ArgumentNullException.ThrowIfNull(newItems);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(watchedRepositories);
 
-        var watched = new HashSet<string>(watchedRepositories ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        var watched = new HashSet<string>(watchedRepositories, StringComparer.OrdinalIgnoreCase);
 
         return newItems.Where(item => ShouldNotify(item, settings, watched, now, recencyWindow)).ToList();
     }

@@ -10,27 +10,14 @@ namespace Trayage.Core.Inbox;
 /// logged and skipped so one failing service can't blank the whole inbox. The polling
 /// service drives this on a timer; the UI can also call it for a manual refresh.
 /// </summary>
-public sealed class InboxService
+public sealed class InboxService(
+    IEnumerable<IInboxProvider> providers,
+    InboxAggregator aggregator,
+    InboxState state,
+    ISettingsStore settings,
+    ILogger<InboxService> logger)
 {
-    private readonly IReadOnlyList<IInboxProvider> _providers;
-    private readonly InboxAggregator _aggregator;
-    private readonly InboxState _state;
-    private readonly ISettingsStore _settings;
-    private readonly ILogger<InboxService> _logger;
-
-    public InboxService(
-        IEnumerable<IInboxProvider> providers,
-        InboxAggregator aggregator,
-        InboxState state,
-        ISettingsStore settings,
-        ILogger<InboxService> logger)
-    {
-        _providers = providers.ToList();
-        _aggregator = aggregator;
-        _state = state;
-        _settings = settings;
-        _logger = logger;
-    }
+    private readonly IReadOnlyList<IInboxProvider> _providers = providers.ToList();
 
     /// <summary>
     /// Fetches and publishes the current inbox, returning the merged snapshot. Never
@@ -38,7 +25,7 @@ public sealed class InboxService
     /// </summary>
     public async Task<IReadOnlyList<InboxItem>> RefreshAsync(CancellationToken cancellationToken)
     {
-        var query = new InboxQuery(_settings.Load().WatchedRepositories);
+        var query = new InboxQuery(settings.Load().WatchedRepositories);
         var perProvider = new List<IReadOnlyList<InboxItem>>(_providers.Count);
 
         foreach (var provider in _providers)
@@ -59,12 +46,12 @@ public sealed class InboxService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Provider {Provider} failed to fetch its inbox.", provider.Provider);
+                logger.LogWarning(ex, "Provider {Provider} failed to fetch its inbox.", provider.Provider);
             }
         }
 
-        var merged = _aggregator.Merge(perProvider);
-        _state.Set(merged);
+        var merged = aggregator.Merge(perProvider);
+        state.Set(merged);
         return merged;
     }
 }
