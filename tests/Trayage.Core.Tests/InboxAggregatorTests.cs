@@ -35,7 +35,7 @@ public sealed class InboxAggregatorTests
     [Fact]
     public void Merge_KeepsItemsFromDifferentProvidersSharingAnId()
     {
-        var gh = TestData.Item("1", ProviderKind.GitHub);
+        var gh = TestData.Item("1");
         var bb = TestData.Item("1", ProviderKind.Bitbucket);
 
         var merged = _aggregator.Merge(new[] { new[] { gh }, new[] { bb } });

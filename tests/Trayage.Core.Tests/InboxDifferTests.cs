@@ -44,10 +44,10 @@ public sealed class InboxDifferTests
     [Fact]
     public void SameIdDifferentProvider_IsTreatedAsDistinct()
     {
-        var previous = new[] { TestData.Item("1", ProviderKind.GitHub) };
+        var previous = new[] { TestData.Item("1") };
         var current = new[]
         {
-            TestData.Item("1", ProviderKind.GitHub),
+            TestData.Item("1"),
             TestData.Item("1", ProviderKind.Bitbucket),
         };
 
