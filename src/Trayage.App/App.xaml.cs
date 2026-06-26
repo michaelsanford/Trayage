@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Threading.Tasks;
 using Trayage.App.Logging;
 using Trayage.App.Notifications;
 using Trayage.App.Tray;
@@ -13,6 +14,8 @@ using Trayage.App.ViewModels;
 using Trayage.App.Views;
 using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
+using Trayage.Core.Models;
+using Trayage.Core.Notifications;
 using Microsoft.Windows.AppLifecycle;
 using Microsoft.Windows.AppNotifications;
 
@@ -23,7 +26,7 @@ namespace Trayage.App;
 /// window, so the WPF shutdown mode is explicit and the lifetime is driven by the
 /// tray icon. A generic host provides DI and (later) background services.
 /// </summary>
-public partial class App : Application
+public partial class App
 {
     private const string SingleInstanceMutexName = "Trayage.SingleInstance.6f1f3a2e";
 
@@ -203,7 +206,7 @@ public partial class App : Application
             ShowInTaskbar = false,
             ShowActivated = false,
             ResizeMode = ResizeMode.NoResize,
-            Style = new System.Windows.Style(typeof(Window)),
+            Style = new Style(typeof(Window)),
         };
 
         // Create the HWND first so it can be marked as a tool window (excluded from the
@@ -220,7 +223,7 @@ public partial class App : Application
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
             CrashLog.Write("AppDomain", args.ExceptionObject as Exception);
-        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, args) =>
+        TaskScheduler.UnobservedTaskException += (_, args) =>
         {
             CrashLog.Write("UnobservedTask", args.Exception);
             args.SetObserved();
@@ -309,16 +312,16 @@ public partial class App : Application
     // NotificationRuleEngine + notifier, exactly as the poller does, so you can see how the
     // pipeline responds to your current settings. The next poll overwrites the snapshot with
     // real provider data, so the injected item is transient.
-    private void InjectItem(Trayage.Core.Models.ProviderKind provider, Trayage.Core.Models.InboxItemKind kind)
+    private void InjectItem(ProviderKind provider, InboxItemKind kind)
     {
         var item = SampleItem(provider, kind);
 
         var state = _host!.Services.GetRequiredService<InboxState>();
         var settings = _host.Services.GetRequiredService<ISettingsStore>().Load();
-        var rules = _host.Services.GetRequiredService<Trayage.Core.Notifications.NotificationRuleEngine>();
-        var notifier = _host.Services.GetRequiredService<Trayage.Core.Notifications.IToastNotifier>();
+        var rules = _host.Services.GetRequiredService<NotificationRuleEngine>();
+        var notifier = _host.Services.GetRequiredService<IToastNotifier>();
 
-        state.Set(new List<Trayage.Core.Models.InboxItem>(state.Items) { item });
+        state.Set(new List<InboxItem>(state.Items) { item });
 
         foreach (var notifiable in rules.SelectNotifiable(new[] { item }, settings.Notifications, settings.WatchedRepositories, DateTimeOffset.UtcNow, InboxRecency.WindowFor(settings)))
         {
@@ -326,12 +329,12 @@ public partial class App : Application
         }
     }
 
-    private static Trayage.Core.Models.InboxItem SampleItem(Trayage.Core.Models.ProviderKind provider, Trayage.Core.Models.InboxItemKind kind)
+    private static InboxItem SampleItem(ProviderKind provider, InboxItemKind kind)
     {
         var webUrl = provider switch
         {
-            Trayage.Core.Models.ProviderKind.Bitbucket => "https://bitbucket.org/michaelsanford/trayage/pull-requests/1",
-            Trayage.Core.Models.ProviderKind.GitLab => "https://gitlab.com/michaelsanford/trayage/-/merge_requests/1",
+            ProviderKind.Bitbucket => "https://bitbucket.org/michaelsanford/trayage/pull-requests/1",
+            ProviderKind.GitLab => "https://gitlab.com/michaelsanford/trayage/-/merge_requests/1",
             _ => "https://github.com/michaelsanford/Trayage/pull/1",
         };
 

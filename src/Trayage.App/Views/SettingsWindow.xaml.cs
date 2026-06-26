@@ -4,7 +4,7 @@ using Wpf.Ui.Controls;
 namespace Trayage.App.Views;
 
 /// <summary>The Fluent settings window. A single instance is reused and hidden on close.</summary>
-public partial class SettingsWindow : FluentWindow
+public partial class SettingsWindow
 {
     public SettingsWindow(SettingsViewModel viewModel)
     {

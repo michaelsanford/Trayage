@@ -10,7 +10,7 @@ namespace Trayage.App.Views;
 /// It hides (rather than closes) when it loses focus or is toggled, so the single
 /// instance lives for the app's lifetime.
 /// </summary>
-public partial class InboxFlyout : Window
+public partial class InboxFlyout
 {
     private static readonly TimeSpan ShowGuard = TimeSpan.FromMilliseconds(300);
 
