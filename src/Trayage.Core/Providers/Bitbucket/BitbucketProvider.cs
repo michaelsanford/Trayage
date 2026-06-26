@@ -571,10 +571,8 @@ public sealed class BitbucketProvider : IInboxProvider
     private async Task<BitbucketTokenResponse> PostTokenAsync(Dictionary<string, string> form, CancellationToken ct)
     {
         var client = _httpClientFactory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, TokenEndpoint)
-        {
-            Content = new FormUrlEncodedContent(form),
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, TokenEndpoint);
+        request.Content = new FormUrlEncodedContent(form);
 
         var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_options.Key}:{_options.Secret}"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
