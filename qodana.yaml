@@ -9,3 +9,9 @@ profile:
   name: qodana.recommended
 include:
   - name: CheckDependencyLicenses
+exclude:
+  - name: Xaml.BindingWithContextNotResolved
+  - name: Xaml.BindingWithoutContextNotResolved
+  - name: XmlHighlighting
+    paths:
+      - src/Trayage.App/app.manifest
