@@ -8,7 +8,7 @@ namespace Trayage.App.Logging;
 /// A tiny append-only file logger. A tray WinExe has no console, so this gives us a
 /// durable record under %APPDATA%\Trayage\logs for diagnosing field issues.
 /// </summary>
-public sealed class FileLoggerProvider : ILoggerProvider
+public sealed partial class FileLoggerProvider : ILoggerProvider
 {
     private readonly string _filePath;
     private readonly LogLevel _minLevel;
