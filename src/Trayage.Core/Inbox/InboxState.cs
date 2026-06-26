@@ -21,7 +21,8 @@ public sealed class InboxState
 
     public void Set(IReadOnlyList<InboxItem> items)
     {
-        _items = items ?? Array.Empty<InboxItem>();
+        ArgumentNullException.ThrowIfNull(items);
+        _items = items;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 }
