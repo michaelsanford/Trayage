@@ -14,21 +14,14 @@ namespace Trayage.Core.Security;
 /// user on the same machine; the file never contains plaintext tokens.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed class DpapiSecretStore : ISecretStore
+public sealed class DpapiSecretStore(ILogger<DpapiSecretStore> logger, string? filePath = null) : ISecretStore
 {
     // Extra entropy mixed into DPAPI so the blobs aren't decryptable by unrelated apps
     // that merely run as the same user.
-    private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("Trayage.SecretStore.v1");
+    private static readonly byte[] Entropy = "Trayage.SecretStore.v1"u8.ToArray();
 
-    private readonly ILogger<DpapiSecretStore> _logger;
-    private readonly string _filePath;
-    private readonly object _gate = new();
-
-    public DpapiSecretStore(ILogger<DpapiSecretStore> logger, string? filePath = null)
-    {
-        _logger = logger;
-        _filePath = filePath ?? TrayagePaths.SecretsFile;
-    }
+    private readonly string _filePath = filePath ?? TrayagePaths.SecretsFile;
+    private readonly System.Threading.Lock _gate = new();
 
     public void Set(string key, string value)
     {
@@ -63,7 +56,7 @@ public sealed class DpapiSecretStore : ISecretStore
             }
             catch (Exception ex) when (ex is CryptographicException or FormatException)
             {
-                _logger.LogWarning(ex, "Could not decrypt secret {Key}; treating as absent.", key);
+                logger.LogWarning(ex, "Could not decrypt secret {Key}; treating as absent.", key);
                 return null;
             }
         }
@@ -108,7 +101,7 @@ public sealed class DpapiSecretStore : ISecretStore
         }
         catch (Exception ex) when (ex is JsonException or IOException)
         {
-            _logger.LogWarning(ex, "Secrets file at {Path} was unreadable; starting empty.", _filePath);
+            logger.LogWarning(ex, "Secrets file at {Path} was unreadable; starting empty.", _filePath);
             return new Dictionary<string, string>(StringComparer.Ordinal);
         }
     }

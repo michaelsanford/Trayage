@@ -19,7 +19,7 @@ public sealed class JsonSettingsStore : ISettingsStore
 
     private readonly ILogger<JsonSettingsStore> _logger;
     private readonly string _filePath;
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
 
     // Cached parse of the settings file, keyed on its last-write time. Load() is called
     // several times per poll cycle (and on every inbox state change), so this avoids
