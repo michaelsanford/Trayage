@@ -21,7 +21,7 @@ public sealed class DpapiSecretStore(ILogger<DpapiSecretStore> logger, string? f
     private static readonly byte[] Entropy = "Trayage.SecretStore.v1"u8.ToArray();
 
     private readonly string _filePath = filePath ?? TrayagePaths.SecretsFile;
-    private readonly System.Threading.Lock _gate = new();
+    private readonly Lock _gate = new();
 
     public void Set(string key, string value)
     {

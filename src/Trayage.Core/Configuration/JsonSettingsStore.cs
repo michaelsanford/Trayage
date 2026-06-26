@@ -18,7 +18,7 @@ public sealed class JsonSettingsStore(ILogger<JsonSettingsStore> logger, string?
     };
 
     private readonly string _filePath = filePath ?? TrayagePaths.SettingsFile;
-    private readonly System.Threading.Lock _gate = new();
+    private readonly Lock _gate = new();
 
     private TrayageSettings? _cache;
     private DateTime _cacheStampUtc;
