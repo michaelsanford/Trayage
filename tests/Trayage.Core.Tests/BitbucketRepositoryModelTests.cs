@@ -21,7 +21,7 @@ public sealed class BitbucketRepositoryModelTests
         var page = JsonSerializer.Deserialize<BitbucketPagedRepositories>(json);
 
         Assert.NotNull(page);
-        Assert.Equal("https://api.bitbucket.org/2.0/repositories/acme?page=2", page!.Next);
+        Assert.Equal("https://api.bitbucket.org/2.0/repositories/acme?page=2", page.Next);
         Assert.Equal(2, page.Values.Count);
         Assert.Equal("acme/widgets", page.Values[0].FullName);
         Assert.Equal("widgets", page.Values[0].Name);
@@ -35,7 +35,7 @@ public sealed class BitbucketRepositoryModelTests
         var page = JsonSerializer.Deserialize<BitbucketPagedUserWorkspaces>(json);
 
         Assert.NotNull(page);
-        Assert.Equal("acme", page!.Values[0].EffectiveSlug);
+        Assert.Equal("acme", page.Values[0].EffectiveSlug);
         Assert.Equal("jdoe", page.Values[1].EffectiveSlug);
     }
 
@@ -48,6 +48,6 @@ public sealed class BitbucketRepositoryModelTests
         var page = JsonSerializer.Deserialize<BitbucketPagedUserWorkspaces>(json);
 
         Assert.NotNull(page);
-        Assert.Equal("acme", page!.Values[0].EffectiveSlug);
+        Assert.Equal("acme", page.Values[0].EffectiveSlug);
     }
 }

@@ -200,7 +200,7 @@ public sealed class GitLabProvider : IInboxProvider
 
             if (status == HttpStatusCode.OK && !string.IsNullOrEmpty(token?.AccessToken))
             {
-                return token!;
+                return token;
             }
 
             switch (token?.Error)
@@ -277,7 +277,7 @@ public sealed class GitLabProvider : IInboxProvider
                 return null;
             }
 
-            StoreTokens(token!);
+            StoreTokens(token);
             return _accessToken;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

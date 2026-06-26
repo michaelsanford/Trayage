@@ -31,7 +31,7 @@ public sealed class GitLabModelTests
         var todos = JsonSerializer.Deserialize<List<GitLabTodo>>(json);
 
         Assert.NotNull(todos);
-        var todo = Assert.Single(todos!);
+        var todo = Assert.Single(todos);
         Assert.Equal(102, todo.Id);
         Assert.Equal("review_requested", todo.ActionName);
         Assert.Equal("MergeRequest", todo.TargetType);
@@ -59,7 +59,7 @@ public sealed class GitLabModelTests
         var device = JsonSerializer.Deserialize<GitLabDeviceAuthResponse>(json);
 
         Assert.NotNull(device);
-        Assert.Equal("abc123", device!.DeviceCode);
+        Assert.Equal("abc123", device.DeviceCode);
         Assert.Equal("WXYZ-1234", device.UserCode);
         Assert.Equal("https://gitlab.com/-/device", device.VerificationUri);
         Assert.Equal("https://gitlab.com/-/device?user_code=WXYZ-1234", device.VerificationUriComplete);
@@ -77,7 +77,7 @@ public sealed class GitLabModelTests
         var token = JsonSerializer.Deserialize<GitLabTokenResponse>(json);
 
         Assert.NotNull(token);
-        Assert.Equal("at", token!.AccessToken);
+        Assert.Equal("at", token.AccessToken);
         Assert.Equal("rt", token.RefreshToken);
         Assert.Equal(7200, token.ExpiresIn);
         Assert.Null(token.Error);
@@ -92,7 +92,7 @@ public sealed class GitLabModelTests
         var token = JsonSerializer.Deserialize<GitLabTokenResponse>(json);
 
         Assert.NotNull(token);
-        Assert.Equal("authorization_pending", token!.Error);
+        Assert.Equal("authorization_pending", token.Error);
         Assert.Null(token.AccessToken);
     }
 }
