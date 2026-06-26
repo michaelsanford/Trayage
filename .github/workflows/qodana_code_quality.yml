@@ -27,6 +27,10 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
+      - name: Stop Docker service
+        run: Stop-Service docker -Force
+        shell: powershell
+
       - name: 'Qodana Scan'
         uses: JetBrains/qodana-action@v2026.1
         with:

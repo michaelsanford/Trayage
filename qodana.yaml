@@ -4,6 +4,7 @@
 
 version: "1.0"
 linter: qodana-dotnet
+withinDocker: false
 profile:
   name: qodana.recommended
 include:
