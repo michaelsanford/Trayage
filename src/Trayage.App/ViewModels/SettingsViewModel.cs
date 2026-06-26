@@ -14,9 +14,12 @@ using Trayage.Core.Providers.Bitbucket;
 using Trayage.Core.Providers.GitHub;
 using Trayage.Core.Providers.GitLab;
 
+// ReSharper disable UnusedParameterInPartialMethod
+
 namespace Trayage.App.ViewModels;
 
 /// <summary>A selectable poll cadence: a display label and its value in seconds.</summary>
+// ReSharper disable once NotAccessedPositionalProperty.Global
 public sealed record PollIntervalOption(string Label, int Seconds);
 
 /// <summary>
