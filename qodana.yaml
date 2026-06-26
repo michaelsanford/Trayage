@@ -25,3 +25,8 @@ exclude:
       - src/Trayage.App/ViewModels/InboxItemViewModel.cs
       - src/Trayage.App/ViewModels/SettingsViewModel.cs
       - src/Trayage.Core/Configuration/ISettingsStore.cs
+
+failureConditions:
+  severityThresholds:
+    critical: 0
+    high: 0
