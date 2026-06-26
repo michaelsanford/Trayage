@@ -9,7 +9,7 @@ namespace Trayage.App.Logging;
 /// </summary>
 public static class CrashLog
 {
-    public static string FilePath => Path.Combine(TrayagePaths.LogDirectory, "crash.log");
+    private static string FilePath => Path.Combine(TrayagePaths.LogDirectory, "crash.log");
 
     public static void Write(string context, Exception? exception)
     {
