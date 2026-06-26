@@ -1,5 +1,4 @@
 using Trayage.App.ViewModels;
-using Wpf.Ui.Controls;
 
 namespace Trayage.App.Views;
 

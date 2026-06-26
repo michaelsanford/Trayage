@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Threading.Tasks;
 using Trayage.App.Logging;
 using Trayage.App.Notifications;
 using Trayage.App.Tray;
