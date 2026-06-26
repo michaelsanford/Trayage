@@ -11,38 +11,19 @@ namespace Trayage.Core.Notifications;
 /// first cycle after launch is silent (it only establishes a baseline) so the user
 /// isn't flooded with notifications for items that were already waiting.
 /// </summary>
-public sealed class InboxPollingService : BackgroundService
+public sealed class InboxPollingService(
+    InboxService inboxService,
+    InboxDiffer differ,
+    NotificationRuleEngine ruleEngine,
+    IToastNotifier notifier,
+    ISettingsStore settings,
+    IEnumerable<IInboxProvider> providers,
+    ILogger<InboxPollingService> logger) : BackgroundService
 {
     private static readonly TimeSpan MinimumInterval = TimeSpan.FromSeconds(30);
 
-    private readonly InboxService _inboxService;
-    private readonly InboxDiffer _differ;
-    private readonly NotificationRuleEngine _ruleEngine;
-    private readonly IToastNotifier _notifier;
-    private readonly ISettingsStore _settings;
-    private readonly IEnumerable<IInboxProvider> _providers;
-    private readonly ILogger<InboxPollingService> _logger;
-
     private IReadOnlyList<InboxItem> _previous = Array.Empty<InboxItem>();
     private bool _baselineEstablished;
-
-    public InboxPollingService(
-        InboxService inboxService,
-        InboxDiffer differ,
-        NotificationRuleEngine ruleEngine,
-        IToastNotifier notifier,
-        ISettingsStore settings,
-        IEnumerable<IInboxProvider> providers,
-        ILogger<InboxPollingService> logger)
-    {
-        _inboxService = inboxService;
-        _differ = differ;
-        _ruleEngine = ruleEngine;
-        _notifier = notifier;
-        _settings = settings;
-        _providers = providers;
-        _logger = logger;
-    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -58,7 +39,7 @@ public sealed class InboxPollingService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Inbox poll cycle failed.");
+                logger.LogError(ex, "Inbox poll cycle failed.");
             }
 
             try
@@ -76,7 +57,7 @@ public sealed class InboxPollingService : BackgroundService
     // sidestepping the ≥30s delay in the ExecuteAsync loop. See InternalsVisibleTo in the .csproj.
     internal async Task PollOnceAsync(CancellationToken cancellationToken)
     {
-        var current = await _inboxService.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        var current = await inboxService.RefreshAsync(cancellationToken).ConfigureAwait(false);
 
         if (!_baselineEstablished)
         {
@@ -85,24 +66,24 @@ public sealed class InboxPollingService : BackgroundService
             return;
         }
 
-        var newItems = _differ.FindNewOrUpdated(_previous, current);
+        var newItems = differ.FindNewOrUpdated(_previous, current);
         if (newItems.Count > 0)
         {
-            var settings = _settings.Load();
-            var toNotify = _ruleEngine.SelectNotifiable(
+            var appSettings = settings.Load();
+            var toNotify = ruleEngine.SelectNotifiable(
                 newItems,
-                settings.Notifications,
-                settings.WatchedRepositories,
+                appSettings.Notifications,
+                appSettings.WatchedRepositories,
                 DateTimeOffset.UtcNow,
-                InboxRecency.WindowFor(settings));
+                InboxRecency.WindowFor(appSettings));
             foreach (var item in toNotify)
             {
-                _notifier.Show(item);
+                notifier.Show(item);
             }
 
             if (toNotify.Count > 0)
             {
-                _logger.LogInformation("Raised {Count} notification(s) for new activity.", toNotify.Count);
+                logger.LogInformation("Raised {Count} notification(s) for new activity.", toNotify.Count);
             }
         }
 
@@ -111,10 +92,10 @@ public sealed class InboxPollingService : BackgroundService
 
     internal TimeSpan NextInterval()
     {
-        var configured = TimeSpan.FromSeconds(Math.Max(_settings.Load().PollIntervalSeconds, 1));
+        var configured = TimeSpan.FromSeconds(Math.Max(settings.Load().PollIntervalSeconds, 1));
 
         // Never poll faster than any provider recommends, nor faster than our own floor.
-        var providerFloor = _providers
+        var providerFloor = providers
             .Select(p => p.SuggestedPollInterval)
             .Where(t => t.HasValue)
             .Select(t => t!.Value)

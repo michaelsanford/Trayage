@@ -8,7 +8,7 @@ namespace Trayage.Core.Configuration;
 /// Stores settings as human-readable JSON at <see cref="TrayagePaths.SettingsFile"/>.
 /// Writes are atomic (temp file + replace) so a crash mid-save can't corrupt config.
 /// </summary>
-public sealed class JsonSettingsStore : ISettingsStore
+public sealed class JsonSettingsStore(ILogger<JsonSettingsStore> logger, string? filePath = null) : ISettingsStore
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -17,22 +17,11 @@ public sealed class JsonSettingsStore : ISettingsStore
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    private readonly ILogger<JsonSettingsStore> _logger;
-    private readonly string _filePath;
+    private readonly string _filePath = filePath ?? TrayagePaths.SettingsFile;
     private readonly System.Threading.Lock _gate = new();
 
-    // Cached parse of the settings file, keyed on its last-write time. Load() is called
-    // several times per poll cycle (and on every inbox state change), so this avoids
-    // re-reading and re-deserialising the file each time while still picking up external
-    // edits (a cheap metadata stat invalidates the cache when the timestamp moves).
     private TrayageSettings? _cache;
     private DateTime _cacheStampUtc;
-
-    public JsonSettingsStore(ILogger<JsonSettingsStore> logger, string? filePath = null)
-    {
-        _logger = logger;
-        _filePath = filePath ?? TrayagePaths.SettingsFile;
-    }
 
     public string FilePath => _filePath;
 
@@ -61,7 +50,7 @@ public sealed class JsonSettingsStore : ISettingsStore
             }
             catch (Exception ex) when (ex is JsonException or IOException)
             {
-                _logger.LogWarning(ex, "Failed to read settings from {Path}; falling back to defaults.", _filePath);
+                logger.LogWarning(ex, "Failed to read settings from {Path}; falling back to defaults.", _filePath);
                 _cache = null;
                 return new TrayageSettings();
             }
