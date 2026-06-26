@@ -74,7 +74,7 @@ public sealed class InboxServiceTests
     public async Task RefreshAsync_CancellationRequested_RethrowsOperationCanceled()
     {
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
         var token = cts.Token;
 
         var provider = Substitute.For<IInboxProvider>();

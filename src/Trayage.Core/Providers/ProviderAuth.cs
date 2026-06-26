@@ -8,7 +8,6 @@ namespace Trayage.Core.Providers;
 public sealed record DeviceCodePrompt(string UserCode, string VerificationUri, TimeSpan ExpiresIn);
 
 /// <summary>Raised when a provider is asked to authenticate but has no client id configured.</summary>
-public sealed class ProviderNotConfiguredException : Exception
+public sealed class ProviderNotConfiguredException(string message) : Exception(message)
 {
-    public ProviderNotConfiguredException(string message) : base(message) { }
 }

@@ -20,7 +20,7 @@ namespace Trayage.App;
 /// </summary>
 internal static class ServiceRegistration
 {
-    public static HostApplicationBuilder ConfigureTrayageServices(this HostApplicationBuilder builder)
+    public static void ConfigureTrayageServices(this HostApplicationBuilder builder)
     {
         // Configuration & secure storage (Phase 2)
         builder.Services.AddSingleton<ISettingsStore, JsonSettingsStore>();
@@ -58,7 +58,5 @@ internal static class ServiceRegistration
         builder.Services.AddSingleton<InboxFlyout>();
         builder.Services.AddSingleton<SettingsViewModel>();
         builder.Services.AddSingleton<SettingsWindow>();
-
-        return builder;
     }
 }
