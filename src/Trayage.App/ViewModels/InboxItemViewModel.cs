@@ -8,6 +8,7 @@ public sealed class InboxItemViewModel
 {
     private readonly bool _includeRepoInSubtitle;
 
+    /// <param name="item">The inbox item.</param>
     /// <param name="includeRepoInSubtitle">
     /// True when the list is flat (sequential), so the repository name is shown in the
     /// subtitle; false when grouped by repository (the group header already shows it).
