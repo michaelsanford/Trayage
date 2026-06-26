@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Trayage.Core\Trayage.Core.csproj" />
@@ -49,6 +49,7 @@
          the warning doesn't apply here. -->
     <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <CsWinRTUseUnsafeExecutionBehavior>true</CsWinRTUseUnsafeExecutionBehavior>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
