@@ -724,7 +724,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.Notifications.CiStatus = NotifyCi;
         s.Notifications.WatchedRepoActivity = NotifyWatchedRepoActivity;
         s.Notifications.Participating = NotifyParticipating;
-        s.WatchedRepositories = WatchedRepositories.ToList();
+        s.WatchedRepositories.Clear();
+        s.WatchedRepositories.AddRange(WatchedRepositories);
         _settings.Save(s);
     }
 }
