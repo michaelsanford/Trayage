@@ -1,4 +1,5 @@
 using Trayage.Core.Configuration;
+using Trayage.Core.Models;
 
 namespace Trayage.Core.Tests;
 
@@ -63,5 +64,38 @@ public sealed class TrayageSettingsTests
         Assert.NotSame(original.GitHub, clone.GitHub);
         Assert.NotSame(original.Bitbucket, clone.Bitbucket);
         Assert.NotSame(original.GitLab, clone.GitLab);
+    }
+
+    [Theory]
+    [InlineData(InboxItemKind.ReviewRequest, true)]
+    [InlineData(InboxItemKind.Mention, true)]
+    [InlineData(InboxItemKind.Assignment, true)]
+    [InlineData(InboxItemKind.CiStatus, false)]
+    [InlineData(InboxItemKind.RepoActivity, true)]
+    [InlineData(InboxItemKind.Participating, true)]
+    public void IsKindEnabled_ReturnsDefaultValuesCorrectly(InboxItemKind kind, bool expected)
+    {
+        var settings = new NotificationSettings();
+        Assert.Equal(expected, settings.IsKindEnabled(kind));
+    }
+
+    [Fact]
+    public void IsKindEnabled_RespectsCustomValues()
+    {
+        var settings = new NotificationSettings
+        {
+            ReviewRequests = false,
+            MentionsAndAssignments = false,
+            CiStatus = true,
+            WatchedRepoActivity = false,
+            Participating = false
+        };
+
+        Assert.False(settings.IsKindEnabled(InboxItemKind.ReviewRequest));
+        Assert.False(settings.IsKindEnabled(InboxItemKind.Mention));
+        Assert.False(settings.IsKindEnabled(InboxItemKind.Assignment));
+        Assert.True(settings.IsKindEnabled(InboxItemKind.CiStatus));
+        Assert.False(settings.IsKindEnabled(InboxItemKind.RepoActivity));
+        Assert.False(settings.IsKindEnabled(InboxItemKind.Participating));
     }
 }
