@@ -2,6 +2,11 @@
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:vm="clr-namespace:Trayage.App.ViewModels"
+                 mc:Ignorable="d"
+                 d:DataContext="{d:DesignInstance vm:SettingsViewModel, IsDesignTimeCreatable=False}"
                  Title="Trayage Settings"
                  Width="640"
                  Height="600"
@@ -258,7 +263,7 @@
                                                         <Expander Margin="0,0,0,4"
                                                                   IsExpanded="{Binding DataContext.RepoFilterActive, RelativeSource={RelativeSource AncestorType=ItemsControl}, Mode=OneWay}">
                                                             <Expander.Header>
-                                                                <StackPanel Orientation="Horizontal">
+                                                                <StackPanel Orientation="Horizontal" d:DataContext="{d:DesignInstance CollectionViewGroup}">
                                                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
                                                                     <TextBlock Text="{Binding ItemCount, StringFormat=' ({0})'}"
                                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -274,7 +279,7 @@
                                 </GroupStyle>
                             </ItemsControl.GroupStyle>
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate>
+                                <DataTemplate DataType="{x:Type vm:WatchedRepoOption}">
                                     <!-- Compact one-line row (workspace is already the group header),
                                          so large accounts list densely instead of a wall of cards. -->
                                     <Grid Margin="0,3,0,3">

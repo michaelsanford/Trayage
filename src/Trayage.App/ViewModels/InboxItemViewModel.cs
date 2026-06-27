@@ -21,6 +21,8 @@ public sealed class InboxItemViewModel
 
     public InboxItem Item { get; }
 
+    public ProviderKind Provider => Item.Provider;
+
     public string Title => Item.Title;
 
     public string RepositoryFullName => Item.RepositoryFullName;
