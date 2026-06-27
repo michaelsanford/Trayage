@@ -3,8 +3,9 @@
 ####################################################################################################################
 
 version: "1.0"
-linter: qodana-dotnet
-withinDocker: false
+linter: qodana-cdnet
+dotnet:
+  solution: Trayage.sln
 profile:
   name: qodana.recommended
 include:

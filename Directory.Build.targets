@@ -1,0 +1,12 @@
+<Project>
+
+  <!-- Override Windows App SDK MakePri targets on Linux/macOS to avoid executing Windows-native MakePri.exe -->
+  <Target Name="_GenerateProjectPriFile" Condition="'$(OS)' != 'Windows_NT'" BeforeTargets="Build">
+    <Message Text="Skipping MakePri.exe execution on non-Windows platform: $(OS)" Importance="high" />
+  </Target>
+
+  <Target Name="_GenerateProjectPriFileCore" Condition="'$(OS)' != 'Windows_NT'" BeforeTargets="Build">
+    <Message Text="Skipping MakePri.exe execution core on non-Windows platform: $(OS)" Importance="high" />
+  </Target>
+
+</Project>
