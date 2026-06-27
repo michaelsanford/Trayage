@@ -7,6 +7,8 @@ artifacts/
 # Visual Studio / Rider
 .vs/
 .idea/
+.vscode/
+scratch/
 *.user
 *.suo
 *.userosscache
@@ -27,7 +29,6 @@ tools/preview/
 Thumbs.db
 desktop.ini
 
-
 # JetBrains ReSharper / Tools
 _ReSharper*/
 *.DotSettings.user
@@ -44,3 +45,7 @@ PublishProfiles/
 *.nupkg
 *.snupkg
 *.binlog
+
+# Code Quality
+*.sarif.json
+!/baseline.sarif.json
