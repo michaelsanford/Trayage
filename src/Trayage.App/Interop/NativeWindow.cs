@@ -10,8 +10,8 @@ namespace Trayage.App.Interop;
 /// </summary>
 internal static class NativeWindow
 {
-    private const int GWL_EXSTYLE = -20;
-    private const int WS_EX_TOOLWINDOW = 0x00000080;
+    private const int GwlExstyle = -20;
+    private const int WsExToolwindow = 0x00000080;
 
     /// <summary>
     /// Excludes a window from the Alt-Tab switcher by adding the tool-window extended
@@ -26,8 +26,8 @@ internal static class NativeWindow
             return;
         }
 
-        var exStyle = GetWindowLong(handle, GWL_EXSTYLE);
-        _ = SetWindowLong(handle, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
+        var exStyle = GetWindowLong(handle, GwlExstyle);
+        _ = SetWindowLong(handle, GwlExstyle, exStyle | WsExToolwindow);
     }
 
     [DllImport("user32.dll", SetLastError = true)]
