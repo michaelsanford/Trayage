@@ -1,3 +1,4 @@
+using System.IO;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -5,6 +6,7 @@ using System.Windows;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Trayage.App.Notifications;
 using Trayage.App.Services;
 using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
@@ -18,9 +20,14 @@ using Trayage.Core.Providers.GitLab;
 
 namespace Trayage.App.ViewModels;
 
+// ReSharper disable NotAccessedPositionalProperty.Global
 /// <summary>A selectable poll cadence: a display label and its value in seconds.</summary>
-// ReSharper disable once NotAccessedPositionalProperty.Global
 public sealed record PollIntervalOption(string Label, int Seconds);
+
+public sealed record NotificationStyleOption(string Label, NotificationStyle Style);
+
+public sealed record NotificationSoundOption(string Label, string Value);
+// ReSharper restore NotAccessedPositionalProperty.Global
 
 /// <summary>
 /// One row in the Bitbucket watched-repo picker: a discovered repository and whether it is
@@ -76,6 +83,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _notifyCi;
     [ObservableProperty] private bool _notifyWatchedRepoActivity;
     [ObservableProperty] private bool _notifyParticipating;
+    [ObservableProperty] private NotificationStyle _selectedNotificationStyle;
+    [ObservableProperty] private string _selectedNotificationSound = "System Asterisk";
 
     [ObservableProperty] private int _pollIntervalSeconds;
     [ObservableProperty] private bool _startWithWindows;
@@ -188,6 +197,70 @@ public sealed partial class SettingsViewModel : ObservableObject
         new PollIntervalOption("30 minutes", 1800),
         new PollIntervalOption("1 hour", 3600),
     };
+
+    public IReadOnlyList<NotificationStyleOption> NotificationStyleOptions { get; } = new[]
+    {
+        new NotificationStyleOption("Toast and sound", NotificationStyle.Both),
+        new NotificationStyleOption("Toast only", NotificationStyle.ToastOnly),
+        new NotificationStyleOption("Sound only", NotificationStyle.AudioOnly)
+    };
+
+    private IReadOnlyList<NotificationSoundOption>? _notificationSounds;
+    public IReadOnlyList<NotificationSoundOption> NotificationSounds => _notificationSounds ??= LoadAvailableSounds();
+
+    public bool SoundSelectionEnabled => SelectedNotificationStyle != NotificationStyle.ToastOnly;
+
+    private IReadOnlyList<NotificationSoundOption> LoadAvailableSounds()
+    {
+        var list = new List<NotificationSoundOption>();
+        try
+        {
+            var dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Notifications");
+            if (Directory.Exists(dir))
+            {
+                var files = Directory.GetFiles(dir, "*.wav");
+                var customOptions = files
+                    .Select(Path.GetFileNameWithoutExtension)
+                    .OfType<string>()
+                    .Select(name => new NotificationSoundOption(SplitCamelCase(name), name))
+                    .ToList();
+
+                string GetSortKey(string label)
+                {
+                    if (label == "Third High") return "Third 1";
+                    if (label == "Third Mid") return "Third 2";
+                    if (label == "Third Low") return "Third 3";
+                    return label;
+                }
+
+                customOptions = customOptions.OrderBy(o => GetSortKey(o.Label), StringComparer.OrdinalIgnoreCase).ToList();
+                list.AddRange(customOptions);
+            }
+        }
+        catch
+        {
+            // Ignore directory search errors
+        }
+
+        // Add system sound options at the end
+        list.Add(new NotificationSoundOption("System Notification", "SystemNotification"));
+        list.Add(new NotificationSoundOption("System Mail Beep", "MailBeep"));
+        list.Add(new NotificationSoundOption("System Asterisk", "SystemAsterisk"));
+        list.Add(new NotificationSoundOption("System Default Beep", "SystemDefault"));
+
+        return list;
+    }
+
+    private static string SplitCamelCase(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return string.Empty;
+        return System.Text.RegularExpressions.Regex.Replace(input, "([A-Z])", " $1").Trim();
+    }
+
+    private void PreviewSound(string soundName)
+    {
+        NotificationSoundPlayer.Play(soundName);
+    }
 
     [RelayCommand]
     private async Task ConnectGitHubAsync()
@@ -566,6 +639,21 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnNotifyParticipatingChanged(bool value) => Persist();
 
+    partial void OnSelectedNotificationStyleChanged(NotificationStyle value)
+    {
+        Persist();
+        OnPropertyChanged(nameof(SoundSelectionEnabled));
+    }
+
+    partial void OnSelectedNotificationSoundChanged(string value)
+    {
+        Persist();
+        if (!_loading)
+        {
+            PreviewSound(value);
+        }
+    }
+
     [RelayCommand]
     private static void OpenLogs()
     {
@@ -648,6 +736,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         NotifyCi = s.Notifications.CiStatus;
         NotifyWatchedRepoActivity = s.Notifications.WatchedRepoActivity;
         NotifyParticipating = s.Notifications.Participating;
+ 
+        SelectedNotificationStyle = s.Notifications.Style;
+
+        var loadedSound = s.Notifications.Sound;
+        if (NotificationSounds.All(o => o.Value != loadedSound))
+        {
+            loadedSound = NotificationSounds.Any(o => o.Value == "Glass") ? "Glass" : (NotificationSounds.Count > 0 ? NotificationSounds[0].Value : "SystemNotification");
+        }
+        SelectedNotificationSound = loadedSound;
 
         // Snap a previously-saved cadence that's no longer offered to the nearest option,
         // so the dropdown always shows a valid selection. The On…Changed persist is
@@ -723,6 +820,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.Notifications.CiStatus = NotifyCi;
         s.Notifications.WatchedRepoActivity = NotifyWatchedRepoActivity;
         s.Notifications.Participating = NotifyParticipating;
+        s.Notifications.Style = SelectedNotificationStyle;
+        s.Notifications.Sound = SelectedNotificationSound;
         s.WatchedRepositories.Clear();
         s.WatchedRepositories.AddRange(WatchedRepositories);
         _settings.Save(s);

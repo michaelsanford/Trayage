@@ -254,6 +254,10 @@ should go to those providers.
 Trayage stands on the shoulders of [**bittray**](https://github.com/michaelsanford/bittray),
 its Go predecessor that watched Bitbucket Server for pull requests needing review a decade ago.
 
+## Audio Assets
+
+The notification sounds included in this project are sourced from [Mixkit](https://mixkit.co/) and used under the Mixkit Sound Effects Free License. Special thanks to Mixkit for providing these high-quality resources.
+
 ## Disclaimer
 
 Trayage is not affiliated with or endorsed by GitHub or Atlassian.

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
+using Trayage.Core.Configuration;
 using Trayage.Core.Models;
 using Trayage.Core.Notifications;
 
@@ -17,7 +18,7 @@ namespace Trayage.App.Notifications;
 /// <see cref="AppNotificationManager.IsSupported"/> and silently no-op when the platform
 /// can't deliver them, so the tray app never throws on a machine without that runtime.
 /// </remarks>
-public sealed class WindowsToastNotifier(ILogger<WindowsToastNotifier> logger) : IToastNotifier
+public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<WindowsToastNotifier> logger) : IToastNotifier
 {
     private const string ActionArgumentKey = "action";
     private const string OpenAction = "open";
@@ -27,28 +28,56 @@ public sealed class WindowsToastNotifier(ILogger<WindowsToastNotifier> logger) :
 
     public void Show(InboxItem item)
     {
+        var settings = settingsStore.Load();
+        var style = settings.Notifications.Style;
+        var sound = settings.Notifications.Sound;
+
+        if (style == NotificationStyle.AudioOnly)
+        {
+            NotificationSoundPlayer.Play(sound, logger);
+            return;
+        }
+
         if (!IsAvailable)
         {
             logger.LogDebug("App notifications aren't supported on this system; skipping toast.");
+            if (style == NotificationStyle.Both)
+            {
+                NotificationSoundPlayer.Play(sound, logger);
+            }
             return;
         }
 
         try
         {
-            var notification = new AppNotificationBuilder()
+            var builder = new AppNotificationBuilder()
                 .AddArgument(ActionArgumentKey, OpenAction)
                 .AddArgument(UrlArgumentKey, item.WebUrl)
                 .AddText(Headline(item))
                 .AddText(item.Title)
-                .AddText(item.RepositoryFullName)
-                .BuildNotification();
+                .AddText(item.RepositoryFullName);
 
+            if (style == NotificationStyle.ToastOnly)
+            {
+                builder.MuteAudio();
+            }
+            else if (style == NotificationStyle.Both)
+            {
+                builder.MuteAudio();
+                NotificationSoundPlayer.Play(sound, logger);
+            }
+
+            var notification = builder.BuildNotification();
             AppNotificationManager.Default.Show(notification);
         }
         catch (Exception ex)
         {
             // A failed toast must never take down the tray app.
             logger.LogWarning(ex, "Failed to show an app notification.");
+            if (style == NotificationStyle.Both)
+            {
+                NotificationSoundPlayer.Play(sound, logger);
+            }
         }
     }
 

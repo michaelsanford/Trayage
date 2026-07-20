@@ -15,6 +15,8 @@ public sealed class TrayageSettingsTests
             StartWithWindows = true,
             SurfaceRecentlyModified = false,
         };
+        original.Notifications.Style = NotificationStyle.AudioOnly;
+        original.Notifications.Sound = "Magic";
 
         var clone = original.Clone();
 
@@ -22,6 +24,8 @@ public sealed class TrayageSettingsTests
         Assert.Equal(AppTheme.Dark, clone.Theme);
         Assert.True(clone.StartWithWindows);
         Assert.False(clone.SurfaceRecentlyModified);
+        Assert.Equal(NotificationStyle.AudioOnly, clone.Notifications.Style);
+        Assert.Equal("Magic", clone.Notifications.Sound);
     }
 
     [Fact]
@@ -29,6 +33,8 @@ public sealed class TrayageSettingsTests
     {
         var original = new TrayageSettings { WatchedRepositories = { "a/b" } };
         original.Notifications.ReviewRequests = true;
+        original.Notifications.Style = NotificationStyle.Both;
+        original.Notifications.Sound = "Glass";
         original.GitHub.Connected = true;
         original.GitHub.AccountLogin = "octocat";
         original.Bitbucket.AccountLogin = "stelvio";
@@ -38,6 +44,8 @@ public sealed class TrayageSettingsTests
         var clone = original.Clone();
         clone.WatchedRepositories.Add("x/y");
         clone.Notifications.ReviewRequests = false;
+        clone.Notifications.Style = NotificationStyle.AudioOnly;
+        clone.Notifications.Sound = "Eol";
         clone.GitHub.Connected = false;
         clone.GitHub.AccountLogin = "changed";
         clone.Bitbucket.AccountLogin = "changed";
@@ -46,6 +54,8 @@ public sealed class TrayageSettingsTests
 
         Assert.Equal(new[] { "a/b" }, original.WatchedRepositories);
         Assert.True(original.Notifications.ReviewRequests);
+        Assert.Equal(NotificationStyle.Both, original.Notifications.Style);
+        Assert.Equal("Glass", original.Notifications.Sound);
         Assert.True(original.GitHub.Connected);
         Assert.Equal("octocat", original.GitHub.AccountLogin);
         Assert.Equal("stelvio", original.Bitbucket.AccountLogin);

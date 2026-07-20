@@ -176,9 +176,42 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
                     <StackPanel>
                         <TextBlock Text="Notifications" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
-                        <TextBlock Text="Choose which kinds of activity raise a Windows toast."
+                        <TextBlock Text="Choose which kinds of activity notify you and how."
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Margin="0,0,0,16" />
+
+                        <ui:CardControl Margin="0,0,0,12">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Notification style" FontWeight="SemiBold" />
+                                    <TextBlock Text="Choose whether to show toasts, play a sound, or both."
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ComboBox ItemsSource="{Binding NotificationStyleOptions}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Style"
+                                      SelectedValue="{Binding SelectedNotificationStyle}"
+                                      MinWidth="160" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Margin="0,0,0,16">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Notification sound" FontWeight="SemiBold" />
+                                    <TextBlock Text="Choose which audio ping plays for new activity."
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ComboBox ItemsSource="{Binding NotificationSounds}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding SelectedNotificationSound}"
+                                      IsEnabled="{Binding SoundSelectionEnabled}"
+                                      MinWidth="160" />
+                        </ui:CardControl>
 
                         <!-- Shown only when the OS can't deliver toasts (Windows App Runtime missing).
                              Trayage still tracks the inbox in the tray; this offers the one-click fix. -->
