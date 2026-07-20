@@ -60,6 +60,8 @@ public sealed class JsonSettingsStoreTests : IDisposable
             WatchedRepositories = { "octocat/hello-world", "acme/widgets" },
         };
         saved.Notifications.CiStatus = true;
+        saved.Notifications.Style = NotificationStyle.AudioOnly;
+        saved.Notifications.Sound = "Arcade";
         saved.GitHub.Connected = true;
         saved.GitHub.AccountLogin = "octocat";
 
@@ -70,6 +72,8 @@ public sealed class JsonSettingsStoreTests : IDisposable
         Assert.Equal(AppTheme.Light, loaded.Theme);
         Assert.True(loaded.StartWithWindows);
         Assert.True(loaded.Notifications.CiStatus);
+        Assert.Equal(NotificationStyle.AudioOnly, loaded.Notifications.Style);
+        Assert.Equal("Arcade", loaded.Notifications.Sound);
         Assert.True(loaded.GitHub.Connected);
         Assert.Equal("octocat", loaded.GitHub.AccountLogin);
         Assert.Equal(new[] { "octocat/hello-world", "acme/widgets" }, loaded.WatchedRepositories);
@@ -78,9 +82,13 @@ public sealed class JsonSettingsStoreTests : IDisposable
     [Fact]
     public void Save_PersistsEnumsAsReadableStrings()
     {
-        NewStore().Save(new TrayageSettings { Theme = AppTheme.Dark });
+        var settings = new TrayageSettings { Theme = AppTheme.Dark };
+        settings.Notifications.Style = NotificationStyle.ToastOnly;
+        NewStore().Save(settings);
 
-        Assert.Contains("\"Dark\"", File.ReadAllText(_path));
+        var json = File.ReadAllText(_path);
+        Assert.Contains("\"Dark\"", json);
+        Assert.Contains("\"ToastOnly\"", json);
     }
 
     [Fact]

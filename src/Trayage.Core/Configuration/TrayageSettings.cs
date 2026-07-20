@@ -9,6 +9,13 @@ public enum AppTheme
     Dark,
 }
 
+public enum NotificationStyle
+{
+    Both,
+    ToastOnly,
+    AudioOnly
+}
+
 /// <summary>
 /// Which classes of new activity should raise a Windows toast. Watched-repo activity
 /// is governed separately by <see cref="TrayageSettings.WatchedRepositories"/>.
@@ -19,6 +26,8 @@ public sealed class NotificationSettings
     public bool MentionsAndAssignments { get; set; } = true;
     public bool CiStatus { get; set; }
     public bool WatchedRepoActivity { get; set; } = true;
+    public NotificationStyle Style { get; set; } = NotificationStyle.Both;
+    public string Sound { get; set; } = "System Asterisk";
 
     /// <summary>Activity on issues/PRs you authored or are participating in.</summary>
     public bool Participating { get; set; } = true;
@@ -109,6 +118,8 @@ public sealed class TrayageSettings
             CiStatus = Notifications.CiStatus,
             WatchedRepoActivity = Notifications.WatchedRepoActivity,
             Participating = Notifications.Participating,
+            Style = Notifications.Style,
+            Sound = Notifications.Sound,
         },
         WatchedRepositories = new List<string>(WatchedRepositories),
         GitHub = new ProviderConnectionState { Connected = GitHub.Connected, AccountLogin = GitHub.AccountLogin },
