@@ -13,4 +13,11 @@ public interface IToastNotifier
     bool IsAvailable { get; }
 
     void Show(InboxItem item);
+
+    /// <summary>
+    /// Shows a free-form notification not tied to an inbox item — used to surface app health
+    /// (e.g. a provider whose sync started failing). <paramref name="url"/>, when non-null,
+    /// is opened if the user clicks the toast.
+    /// </summary>
+    void ShowMessage(string title, string body, string? url = null);
 }

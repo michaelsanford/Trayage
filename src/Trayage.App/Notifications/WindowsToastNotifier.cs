@@ -81,6 +81,57 @@ public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<W
         }
     }
 
+    public void ShowMessage(string title, string body, string? url = null)
+    {
+        var settings = settingsStore.Load();
+        var style = settings.Notifications.Style;
+        var sound = settings.Notifications.Sound;
+
+        // Health messages honour the configured ping, but — unlike item toasts — AudioOnly does
+        // not suppress the toast itself. A bare chime can't tell the user *which* provider broke,
+        // and silently dropping a "sync failed" alert is the failure mode this exists to prevent.
+        if (style != NotificationStyle.ToastOnly)
+        {
+            NotificationSoundPlayer.Play(sound, logger);
+        }
+
+        if (!IsAvailable)
+        {
+            logger.LogWarning(
+                "App notifications aren't supported on this system; '{Title}' was not shown as a toast.", title);
+            return;
+        }
+
+        try
+        {
+            var builder = new AppNotificationBuilder()
+                .AddText(title)
+                .AddText(body);
+
+            // Only make the toast clickable when there's somewhere to go; the activation
+            // handler no-ops without a URL argument (see App.OpenToastUrl).
+            if (!string.IsNullOrEmpty(url))
+            {
+                builder
+                    .AddArgument(ActionArgumentKey, OpenAction)
+                    .AddArgument(UrlArgumentKey, url);
+            }
+
+            // We played the configured sound above, so don't let Windows layer its own on top.
+            if (style != NotificationStyle.ToastOnly)
+            {
+                builder.MuteAudio();
+            }
+
+            AppNotificationManager.Default.Show(builder.BuildNotification());
+        }
+        catch (Exception ex)
+        {
+            // A failed toast must never take down the tray app.
+            logger.LogWarning(ex, "Failed to show a message notification.");
+        }
+    }
+
     private static string Headline(InboxItem item) => item.Kind switch
     {
         InboxItemKind.ReviewRequest => "Review requested",
