@@ -490,14 +490,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         RepoLoadStatus = "Loading your Bitbucket repositories…";
         try
         {
-            var repos = await _bitbucket.ListAccessibleRepositoriesAsync(CancellationToken.None);
+            var result = await _bitbucket.ListAccessibleRepositoriesAsync(CancellationToken.None);
 
             _populatingRepos = true;
             BitbucketRepoOptions.Clear();
             var watched = new HashSet<string>(WatchedRepositories, StringComparer.OrdinalIgnoreCase);
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var repo in repos)
+            foreach (var repo in result.Repositories)
             {
                 if (seen.Add(repo.FullName))
                 {
@@ -517,9 +517,21 @@ public sealed partial class SettingsViewModel : ObservableObject
 
             _populatingRepos = false;
             BitbucketRepoView.Refresh();
-            RepoLoadStatus = BitbucketRepoOptions.Count == 0
-                ? "No repositories found for this account."
-                : $"{BitbucketRepoOptions.Count} repositories — toggle the ones you want to watch.";
+
+            // Three distinct outcomes: a degraded fetch (something failed — don't imply the
+            // account is empty), a genuinely empty account, or a normal list.
+            if (result.Partial)
+            {
+                RepoLoadStatus = result.Warning ?? "Some repositories may be missing. See logs, or add a repo manually.";
+            }
+            else if (BitbucketRepoOptions.Count == 0)
+            {
+                RepoLoadStatus = "No repositories found for this account.";
+            }
+            else
+            {
+                RepoLoadStatus = $"{BitbucketRepoOptions.Count} repositories — toggle the ones you want to watch.";
+            }
         }
         catch (Exception ex)
         {

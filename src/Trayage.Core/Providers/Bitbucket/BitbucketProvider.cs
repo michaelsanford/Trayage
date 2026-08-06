@@ -18,6 +18,17 @@ namespace Trayage.Core.Providers.Bitbucket;
 public sealed record RepositorySummary(string FullName, string Name);
 
 /// <summary>
+/// Outcome of a repository-listing attempt. <paramref name="Partial"/> is <c>true</c> when a
+/// request failed or a page cap was hit, so the list may be missing repositories the user can
+/// actually reach — the UI uses this to distinguish a genuine empty account from a degraded
+/// fetch. <paramref name="Warning"/> is a user-facing sentence to show when <c>Partial</c>.
+/// </summary>
+public sealed record RepositoryListResult(IReadOnlyList<RepositorySummary> Repositories, bool Partial, string? Warning)
+{
+    public static readonly RepositoryListResult Empty = new(Array.Empty<RepositorySummary>(), Partial: false, Warning: null);
+}
+
+/// <summary>
 /// Bitbucket Cloud inbox provider. Bitbucket has no notification inbox and no device
 /// flow, so this authenticates with the authorization-code flow over a loopback redirect
 /// and assembles an inbox from per-watched-repo pull-request queries:
@@ -208,34 +219,48 @@ public sealed class BitbucketProvider : IInboxProvider
     /// can't hold repo access without workspace membership, so this covers everything they can
     /// reach. Returns an empty list (never throws) when not connected.
     /// </summary>
-    public async Task<IReadOnlyList<RepositorySummary>> ListAccessibleRepositoriesAsync(CancellationToken cancellationToken)
+    public async Task<RepositoryListResult> ListAccessibleRepositoriesAsync(CancellationToken cancellationToken)
     {
         if (!IsConnected)
         {
-            return Array.Empty<RepositorySummary>();
+            return RepositoryListResult.Empty;
         }
 
         var token = await GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
         if (token is null)
         {
-            return Array.Empty<RepositorySummary>();
+            _logger.LogWarning("Bitbucket repository listing skipped: no usable access token (refresh may have failed).");
+            return new RepositoryListResult(
+                Array.Empty<RepositorySummary>(),
+                Partial: true,
+                Warning: "Couldn't authenticate with Bitbucket. Disconnect and reconnect Bitbucket in Settings.");
         }
 
         try
         {
             var workspaces = await GetUserWorkspaceSlugsAsync(cancellationToken).ConfigureAwait(false);
-            if (workspaces.Count == 0)
+            if (workspaces.Slugs.Count == 0)
             {
-                return Array.Empty<RepositorySummary>();
+                if (workspaces.Failed)
+                {
+                    _logger.LogWarning("Couldn't list Bitbucket workspaces; the repository list is unavailable.");
+                    return new RepositoryListResult(
+                        Array.Empty<RepositorySummary>(),
+                        Partial: true,
+                        Warning: "Couldn't reach Bitbucket to list your workspaces. Check your connection and try again.");
+                }
+
+                _logger.LogWarning("Bitbucket returned no workspaces for this account.");
+                return RepositoryListResult.Empty;
             }
 
             using var semaphore = new SemaphoreSlim(4);
-            var tasks = workspaces.Select(ws => GetWorkspaceRepositoriesAsync(ws, semaphore, cancellationToken)).ToList();
+            var tasks = workspaces.Slugs.Select(ws => GetWorkspaceRepositoriesAsync(ws, semaphore, cancellationToken)).ToList();
             var perWorkspace = await Task.WhenAll(tasks).ConfigureAwait(false);
 
             // Dedupe by full name (defensive), then most-recently-updated first.
             var byName = new Dictionary<string, BitbucketRepositorySummary>(StringComparer.OrdinalIgnoreCase);
-            foreach (var repo in perWorkspace.SelectMany(r => r))
+            foreach (var repo in perWorkspace.SelectMany(r => r.Repositories))
             {
                 if (!string.IsNullOrEmpty(repo.FullName))
                 {
@@ -243,10 +268,18 @@ public sealed class BitbucketProvider : IInboxProvider
                 }
             }
 
-            return byName.Values
+            var repositories = byName.Values
                 .OrderByDescending(r => BitbucketMapping.ParseTimestamp(r.UpdatedOn))
                 .Select(r => new RepositorySummary(r.FullName!, r.Name ?? r.FullName!))
                 .ToList();
+
+            // A failed page (network/5xx/429) or a hit page cap means the list may be missing
+            // repositories the user can reach — flag it so the UI doesn't read as "empty account".
+            var partial = workspaces.Failed || perWorkspace.Any(r => r.Failed || r.Truncated);
+            var warning = partial
+                ? "Some repositories may be missing — a Bitbucket request failed or hit the page limit. See logs, or add a repo manually."
+                : null;
+            return new RepositoryListResult(repositories, partial, warning);
         }
         catch (InvalidOperationException)
         {
@@ -256,12 +289,15 @@ public sealed class BitbucketProvider : IInboxProvider
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "Failed to list accessible Bitbucket repositories.");
-            return Array.Empty<RepositorySummary>();
+            _logger.LogError(ex, "Failed to list accessible Bitbucket repositories.");
+            return new RepositoryListResult(
+                Array.Empty<RepositorySummary>(),
+                Partial: true,
+                Warning: "Couldn't load repositories from Bitbucket. See logs for details.");
         }
     }
 
-    private async Task<List<string>> GetUserWorkspaceSlugsAsync(CancellationToken ct)
+    private async Task<WorkspaceSlugsResult> GetUserWorkspaceSlugsAsync(CancellationToken ct)
     {
         var slugs = new List<string>();
         var next = $"{ApiBase}/user/workspaces?pagelen=100";
@@ -269,7 +305,12 @@ public sealed class BitbucketProvider : IInboxProvider
 
         while (next is not null && page < MaxPagesPerQuery)
         {
-            var data = await GetWithScopeCheckAsync<BitbucketPagedUserWorkspaces>(next, "account", "Account", ct).ConfigureAwait(false);
+            var (data, failed) = await GetWithScopeCheckAsync<BitbucketPagedUserWorkspaces>(next, "account", "Account", ct).ConfigureAwait(false);
+            if (failed)
+            {
+                return new WorkspaceSlugsResult(slugs, Failed: true);
+            }
+
             if (data is null)
             {
                 break;
@@ -287,10 +328,10 @@ public sealed class BitbucketProvider : IInboxProvider
             page++;
         }
 
-        return slugs;
+        return new WorkspaceSlugsResult(slugs, Failed: false);
     }
 
-    private async Task<List<BitbucketRepositorySummary>> GetWorkspaceRepositoriesAsync(string workspace, SemaphoreSlim semaphore, CancellationToken ct)
+    private async Task<WorkspaceReposResult> GetWorkspaceRepositoriesAsync(string workspace, SemaphoreSlim semaphore, CancellationToken ct)
     {
         await semaphore.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -302,7 +343,12 @@ public sealed class BitbucketProvider : IInboxProvider
 
             while (next is not null && page < MaxPagesPerQuery)
             {
-                var data = await GetWithScopeCheckAsync<BitbucketPagedRepositories>(next, "repository", "Repositories", ct).ConfigureAwait(false);
+                var (data, failed) = await GetWithScopeCheckAsync<BitbucketPagedRepositories>(next, "repository", "Repositories", ct).ConfigureAwait(false);
+                if (failed)
+                {
+                    return new WorkspaceReposResult(list, Failed: true, Truncated: false);
+                }
+
                 if (data is null)
                 {
                     break;
@@ -313,12 +359,13 @@ public sealed class BitbucketProvider : IInboxProvider
                 page++;
             }
 
-            if (next is not null)
+            var truncated = next is not null;
+            if (truncated)
             {
                 _logger.LogInformation("Bitbucket workspace {Workspace} has more repositories than the {Max}-page cap; some omitted. Use manual entry to add them.", workspace, MaxPagesPerQuery);
             }
 
-            return list;
+            return new WorkspaceReposResult(list, Failed: false, Truncated: truncated);
         }
         finally
         {
@@ -326,18 +373,23 @@ public sealed class BitbucketProvider : IInboxProvider
         }
     }
 
+    private readonly record struct WorkspaceSlugsResult(List<string> Slugs, bool Failed);
+
+    private readonly record struct WorkspaceReposResult(List<BitbucketRepositorySummary> Repositories, bool Failed, bool Truncated);
+
     /// <summary>
     /// GET that deserializes <typeparamref name="T"/>, but turns a 403 into an actionable
     /// error naming the token's actual scopes and the consumer permission to enable. A token
     /// refresh keeps whatever scopes it was first authorized with, so a fresh reconnect is
     /// required after changing consumer permissions.
     /// </summary>
-    private async Task<T?> GetWithScopeCheckAsync<T>(string url, string scope, string consumerPermission, CancellationToken ct) where T : class
+    private async Task<(T? Data, bool Failed)> GetWithScopeCheckAsync<T>(string url, string scope, string consumerPermission, CancellationToken ct) where T : class
     {
         using var response = await SendWithAuthAsync(() => new HttpRequestMessage(HttpMethod.Get, url), ct).ConfigureAwait(false);
         if (response is null)
         {
-            return null;
+            _logger.LogWarning("Bitbucket GET {Url} produced no response (auth or network failure).", Redact(url));
+            return (null, true);
         }
 
         if (response.StatusCode == HttpStatusCode.Forbidden)
@@ -351,11 +403,13 @@ public sealed class BitbucketProvider : IInboxProvider
 
         if (!response.IsSuccessStatusCode)
         {
-            return null;
+            _logger.LogWarning("Bitbucket GET {Url} returned {Status}.", Redact(url), (int)response.StatusCode);
+            return (null, true);
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        return await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: ct).ConfigureAwait(false);
+        var data = await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: ct).ConfigureAwait(false);
+        return (data, false);
     }
 
     private async Task<List<InboxItem>> GetWatchedRepoAsync(string repo, string uuid, SemaphoreSlim semaphore, CancellationToken ct)
