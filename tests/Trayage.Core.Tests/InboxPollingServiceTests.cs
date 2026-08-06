@@ -50,6 +50,86 @@ public sealed class InboxPollingServiceTests
 
     private static IReadOnlyList<InboxItem> Snapshot(params InboxItem[] items) => items;
 
+    /// <summary>
+    /// Builds a polling service around a single GitHub provider whose <c>FetchInboxAsync</c>
+    /// throws on the cycles named in <paramref name="throwsOnCycle"/> (0-based) and returns an
+    /// empty snapshot otherwise — used to drive provider-health transitions.
+    /// </summary>
+    private InboxPollingService NewHealthService(params int[] throwsOnCycle)
+    {
+        _settings.Load().Returns(new TrayageSettings());
+
+        var provider = Substitute.For<IInboxProvider>();
+        provider.Provider.Returns(ProviderKind.GitHub);
+        provider.IsConnected.Returns(true);
+
+        var throwing = new HashSet<int>(throwsOnCycle);
+        var cycle = 0;
+        provider.FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                var current = cycle++;
+                if (throwing.Contains(current))
+                {
+                    throw new InvalidOperationException("boom");
+                }
+
+                return Task.FromResult<IReadOnlyList<InboxItem>>(Array.Empty<InboxItem>());
+            });
+
+        var providers = new[] { provider };
+        var inboxService = new InboxService(
+            providers, new InboxAggregator(), new InboxState(), _settings, NullLogger<InboxService>.Instance);
+
+        return new InboxPollingService(
+            inboxService,
+            new InboxDiffer(),
+            new NotificationRuleEngine(),
+            _notifier,
+            _settings,
+            providers,
+            NullLogger<InboxPollingService>.Instance);
+    }
+
+    [Fact]
+    public async Task ProviderFails_RaisesHealthToastOnceOnTransition()
+    {
+        var service = NewHealthService(throwsOnCycle: new[] { 0, 1, 2 });
+
+        await service.PollOnceAsync(CancellationToken.None);
+        await service.PollOnceAsync(CancellationToken.None);
+        await service.PollOnceAsync(CancellationToken.None);
+
+        // One toast on the healthy→failing transition, then silence while it stays failing.
+        _notifier.Received(1).ShowMessage(
+            Arg.Is<string>(t => t.Contains("sync failed")), Arg.Any<string>(), Arg.Any<string?>());
+    }
+
+    [Fact]
+    public async Task ProviderRecovers_RaisesRestoredToast()
+    {
+        var service = NewHealthService(throwsOnCycle: new[] { 0 });
+
+        await service.PollOnceAsync(CancellationToken.None); // fails
+        await service.PollOnceAsync(CancellationToken.None); // recovers
+
+        _notifier.Received(1).ShowMessage(
+            Arg.Is<string>(t => t.Contains("sync failed")), Arg.Any<string>(), Arg.Any<string?>());
+        _notifier.Received(1).ShowMessage(
+            Arg.Is<string>(t => t.Contains("sync restored")), Arg.Any<string>(), Arg.Any<string?>());
+    }
+
+    [Fact]
+    public async Task ProviderHealthy_RaisesNoHealthToast()
+    {
+        var service = NewHealthService();
+
+        await service.PollOnceAsync(CancellationToken.None);
+        await service.PollOnceAsync(CancellationToken.None);
+
+        _notifier.DidNotReceive().ShowMessage(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>());
+    }
+
     [Fact]
     public async Task FirstPoll_IsSilent_EvenWithItems()
     {

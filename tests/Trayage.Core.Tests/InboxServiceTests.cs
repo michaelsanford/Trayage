@@ -42,8 +42,9 @@ public sealed class InboxServiceTests
 
         var result = await NewService(healthy, failing).RefreshAsync(CancellationToken.None);
 
-        Assert.Single(result);
-        Assert.Equal("gh1", result[0].Id);
+        Assert.Single(result.Items);
+        Assert.Equal("gh1", result.Items[0].Id);
+        Assert.Equal(new[] { ProviderKind.Bitbucket }, result.FailedProviders);
     }
 
     [Fact]
@@ -53,7 +54,8 @@ public sealed class InboxServiceTests
 
         var result = await NewService(disconnected).RefreshAsync(CancellationToken.None);
 
-        Assert.Empty(result);
+        Assert.Empty(result.Items);
+        Assert.Empty(result.FailedProviders);
         await disconnected.DidNotReceive().FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>());
     }
 
@@ -66,7 +68,7 @@ public sealed class InboxServiceTests
 
         var result = await NewService(provider).RefreshAsync(CancellationToken.None);
 
-        Assert.Equal(result, _state.Items);
+        Assert.Equal(result.Items, _state.Items);
         Assert.Equal(1, changedRaised);
     }
 

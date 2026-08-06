@@ -22,8 +22,17 @@ public sealed class InboxPollingService(
 {
     private static readonly TimeSpan MinimumInterval = TimeSpan.FromSeconds(30);
 
+    // Raise a whole-cycle failure toast only after this many consecutive failed cycles, so a
+    // single transient blip doesn't nag the user.
+    private const int CycleFailuresBeforeAlert = 3;
+
     private IReadOnlyList<InboxItem> _previous = Array.Empty<InboxItem>();
     private bool _baselineEstablished;
+
+    // Providers currently in a failing state, so we toast only on healthy→failing and
+    // failing→healthy transitions rather than every cycle.
+    private readonly HashSet<ProviderKind> _failingProviders = new();
+    private int _consecutiveCycleFailures;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -32,6 +41,7 @@ public sealed class InboxPollingService(
             try
             {
                 await PollOnceAsync(stoppingToken).ConfigureAwait(false);
+                _consecutiveCycleFailures = 0;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -40,6 +50,13 @@ public sealed class InboxPollingService(
             catch (Exception ex)
             {
                 logger.LogError(ex, "Inbox poll cycle failed.");
+                _consecutiveCycleFailures++;
+                if (_consecutiveCycleFailures == CycleFailuresBeforeAlert)
+                {
+                    notifier.ShowMessage(
+                        "Trayage can't refresh",
+                        "Trayage has failed to check for new activity several times in a row. Check your connection or reconnect your providers in Settings.");
+                }
             }
 
             try
@@ -57,7 +74,12 @@ public sealed class InboxPollingService(
     // sidestepping the ≥30s delay in the ExecuteAsync loop. See InternalsVisibleTo in the .csproj.
     internal async Task PollOnceAsync(CancellationToken cancellationToken)
     {
-        var current = await inboxService.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        var result = await inboxService.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        var current = result.Items;
+
+        // Surface provider health on every cycle (including the silent baseline cycle) so a
+        // provider that's broken from the start still gets reported.
+        SurfaceProviderHealth(result.FailedProviders);
 
         if (!_baselineEstablished)
         {
@@ -88,6 +110,31 @@ public sealed class InboxPollingService(
         }
 
         _previous = current;
+    }
+
+    // Toasts once when a provider starts failing and once when it recovers, tracking state in
+    // _failingProviders so a persistently-broken provider doesn't notify every cycle.
+    private void SurfaceProviderHealth(IReadOnlyList<ProviderKind> failedThisCycle)
+    {
+        foreach (var provider in failedThisCycle)
+        {
+            if (_failingProviders.Add(provider))
+            {
+                var name = provider.DisplayName();
+                notifier.ShowMessage(
+                    $"{name} sync failed",
+                    $"Trayage couldn't reach {name}, so you may be missing notifications. Try reconnecting it in Settings.");
+            }
+        }
+
+        // Anything previously failing that didn't fail this cycle has recovered.
+        var recovered = _failingProviders.Where(p => !failedThisCycle.Contains(p)).ToList();
+        foreach (var provider in recovered)
+        {
+            _failingProviders.Remove(provider);
+            var name = provider.DisplayName();
+            notifier.ShowMessage($"{name} sync restored", $"Trayage is receiving {name} activity again.");
+        }
     }
 
     internal TimeSpan NextInterval()

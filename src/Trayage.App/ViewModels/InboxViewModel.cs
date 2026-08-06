@@ -55,13 +55,24 @@ public sealed partial class InboxViewModel : ObservableObject
         IsRefreshing = true;
         try
         {
-            await _inboxService.RefreshAsync(CancellationToken.None);
+            var result = await _inboxService.RefreshAsync(CancellationToken.None);
+
+            // A provider that failed this refresh means the list the user is looking at is
+            // incomplete. Say so rather than letting an unchanged (or emptier) list read as
+            // "nothing new". Cleared on the next refresh that succeeds.
+            _degradedNotice = result.FailedProviders.Count == 0
+                ? null
+                : $"Couldn't reach {Join(result.FailedProviders)} — this list may be incomplete.";
+            Rebuild(force: true);
         }
         finally
         {
             IsRefreshing = false;
         }
     }
+
+    private static string Join(IReadOnlyList<ProviderKind> providers) =>
+        string.Join(" and ", providers.Select(p => p.DisplayName()));
 
     [RelayCommand]
     private static void OpenItem(InboxItemViewModel? item)
@@ -106,7 +117,17 @@ public sealed partial class InboxViewModel : ObservableObject
 
     private bool? _lastGroupByRepo;
 
-    private void Rebuild()
+    /// <summary>
+    /// Set when the last manual refresh had a failing provider; appended to <see cref="StatusText"/>
+    /// on every render so a re-render doesn't drop the warning. Null when everything is healthy.
+    /// </summary>
+    private string? _degradedNotice;
+
+    /// <param name="force">
+    /// Re-render the status line even when no item moved — needed when only
+    /// <see cref="_degradedNotice"/> changed.
+    /// </param>
+    private void Rebuild(bool force = false)
     {
         var settings = _settings.Load();
         var groupByRepo = settings.GroupByRepository;
@@ -172,18 +193,22 @@ public sealed partial class InboxViewModel : ObservableObject
         }
 
         // Nothing visible moved; skip the status/notify work too.
-        if (!changed && !groupingChanged)
+        if (!changed && !groupingChanged && !force)
         {
             return;
         }
 
         var unread = Items.Count(i => i.IsUnread);
         OnPropertyChanged(nameof(IsEmpty));
-        StatusText = Items.Count == 0
+        var status = Items.Count == 0
             ? "You're all caught up."
             : unread == 0
                 ? $"{Items.Count} item{(Items.Count == 1 ? string.Empty : "s")}, all read."
                 : $"{unread} item{(unread == 1 ? string.Empty : "s")} need your attention.";
+
+        // "You're all caught up." is exactly the wrong thing to say when a provider is down, so
+        // the degraded notice replaces the count rather than trailing it.
+        StatusText = _degradedNotice ?? status;
     }
 
     /// <summary>

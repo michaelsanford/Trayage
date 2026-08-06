@@ -8,6 +8,21 @@ public enum ProviderKind
     GitLab,
 }
 
+public static class ProviderKindExtensions
+{
+    /// <summary>
+    /// The provider's name as written in user-facing text (toasts, status lines). Distinct from
+    /// <see cref="Enum.ToString()"/> only in casing today, but a single place to fix when it isn't.
+    /// </summary>
+    public static string DisplayName(this ProviderKind provider) => provider switch
+    {
+        ProviderKind.GitHub => "GitHub",
+        ProviderKind.Bitbucket => "Bitbucket",
+        ProviderKind.GitLab => "GitLab",
+        _ => provider.ToString(),
+    };
+}
+
 /// <summary>
 /// The class of activity an item represents. Notification rules and the tray UI
 /// group on this, and it maps onto provider-specific reasons during fetch.
