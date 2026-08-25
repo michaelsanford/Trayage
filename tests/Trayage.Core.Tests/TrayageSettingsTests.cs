@@ -17,6 +17,7 @@ public sealed class TrayageSettingsTests
         };
         original.Notifications.Style = NotificationStyle.AudioOnly;
         original.Notifications.Sound = "Magic";
+        original.Notifications.Volume = 35;
 
         var clone = original.Clone();
 
@@ -26,6 +27,7 @@ public sealed class TrayageSettingsTests
         Assert.False(clone.SurfaceRecentlyModified);
         Assert.Equal(NotificationStyle.AudioOnly, clone.Notifications.Style);
         Assert.Equal("Magic", clone.Notifications.Sound);
+        Assert.Equal(35, clone.Notifications.Volume);
     }
 
     [Fact]
@@ -35,6 +37,7 @@ public sealed class TrayageSettingsTests
         original.Notifications.ReviewRequests = true;
         original.Notifications.Style = NotificationStyle.Both;
         original.Notifications.Sound = "Glass";
+        original.Notifications.Volume = 80;
         original.GitHub.Connected = true;
         original.GitHub.AccountLogin = "octocat";
         original.Bitbucket.AccountLogin = "stelvio";
@@ -46,6 +49,7 @@ public sealed class TrayageSettingsTests
         clone.Notifications.ReviewRequests = false;
         clone.Notifications.Style = NotificationStyle.AudioOnly;
         clone.Notifications.Sound = "Eol";
+        clone.Notifications.Volume = 20;
         clone.GitHub.Connected = false;
         clone.GitHub.AccountLogin = "changed";
         clone.Bitbucket.AccountLogin = "changed";
@@ -56,6 +60,7 @@ public sealed class TrayageSettingsTests
         Assert.True(original.Notifications.ReviewRequests);
         Assert.Equal(NotificationStyle.Both, original.Notifications.Style);
         Assert.Equal("Glass", original.Notifications.Sound);
+        Assert.Equal(80, original.Notifications.Volume);
         Assert.True(original.GitHub.Connected);
         Assert.Equal("octocat", original.GitHub.AccountLogin);
         Assert.Equal("stelvio", original.Bitbucket.AccountLogin);
@@ -107,5 +112,12 @@ public sealed class TrayageSettingsTests
         Assert.True(settings.IsKindEnabled(InboxItemKind.CiStatus));
         Assert.False(settings.IsKindEnabled(InboxItemKind.RepoActivity));
         Assert.False(settings.IsKindEnabled(InboxItemKind.Participating));
+    }
+
+    [Fact]
+    public void NotificationSettings_Defaults_VolumeIs50()
+    {
+        var settings = new NotificationSettings();
+        Assert.Equal(50, settings.Volume);
     }
 }
