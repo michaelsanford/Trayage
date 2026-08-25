@@ -85,6 +85,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _notifyParticipating;
     [ObservableProperty] private NotificationStyle _selectedNotificationStyle;
     [ObservableProperty] private string _selectedNotificationSound = "System Asterisk";
+    [ObservableProperty] private int _notificationVolume = 50;
 
     [ObservableProperty] private int _pollIntervalSeconds;
     [ObservableProperty] private bool _startWithWindows;
@@ -257,9 +258,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         return System.Text.RegularExpressions.Regex.Replace(input, "([A-Z])", " $1").Trim();
     }
 
-    private void PreviewSound(string soundName)
+    private void PreviewSound(string soundName, int? volume = null)
     {
-        NotificationSoundPlayer.Play(soundName);
+        NotificationSoundPlayer.Play(soundName, volume ?? NotificationVolume);
     }
 
     [RelayCommand]
@@ -662,7 +663,16 @@ public sealed partial class SettingsViewModel : ObservableObject
         Persist();
         if (!_loading)
         {
-            PreviewSound(value);
+            PreviewSound(value, NotificationVolume);
+        }
+    }
+
+    partial void OnNotificationVolumeChanged(int value)
+    {
+        Persist();
+        if (!_loading)
+        {
+            PreviewSound(SelectedNotificationSound, value);
         }
     }
 
@@ -757,6 +767,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             loadedSound = NotificationSounds.Any(o => o.Value == "Glass") ? "Glass" : (NotificationSounds.Count > 0 ? NotificationSounds[0].Value : "SystemNotification");
         }
         SelectedNotificationSound = loadedSound;
+        NotificationVolume = s.Notifications.Volume;
 
         // Snap a previously-saved cadence that's no longer offered to the nearest option,
         // so the dropdown always shows a valid selection. The On…Changed persist is
@@ -834,6 +845,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.Notifications.Participating = NotifyParticipating;
         s.Notifications.Style = SelectedNotificationStyle;
         s.Notifications.Sound = SelectedNotificationSound;
+        s.Notifications.Volume = NotificationVolume;
         s.WatchedRepositories.Clear();
         s.WatchedRepositories.AddRange(WatchedRepositories);
         _settings.Save(s);

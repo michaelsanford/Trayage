@@ -31,10 +31,11 @@ public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<W
         var settings = settingsStore.Load();
         var style = settings.Notifications.Style;
         var sound = settings.Notifications.Sound;
+        var volume = settings.Notifications.Volume;
 
         if (style == NotificationStyle.AudioOnly)
         {
-            NotificationSoundPlayer.Play(sound, logger);
+            NotificationSoundPlayer.Play(sound, volume, logger);
             return;
         }
 
@@ -43,7 +44,7 @@ public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<W
             logger.LogDebug("App notifications aren't supported on this system; skipping toast.");
             if (style == NotificationStyle.Both)
             {
-                NotificationSoundPlayer.Play(sound, logger);
+                NotificationSoundPlayer.Play(sound, volume, logger);
             }
             return;
         }
@@ -64,7 +65,7 @@ public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<W
             else if (style == NotificationStyle.Both)
             {
                 builder.MuteAudio();
-                NotificationSoundPlayer.Play(sound, logger);
+                NotificationSoundPlayer.Play(sound, volume, logger);
             }
 
             var notification = builder.BuildNotification();
@@ -76,7 +77,7 @@ public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<W
             logger.LogWarning(ex, "Failed to show an app notification.");
             if (style == NotificationStyle.Both)
             {
-                NotificationSoundPlayer.Play(sound, logger);
+                NotificationSoundPlayer.Play(sound, volume, logger);
             }
         }
     }
@@ -86,13 +87,14 @@ public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<W
         var settings = settingsStore.Load();
         var style = settings.Notifications.Style;
         var sound = settings.Notifications.Sound;
+        var volume = settings.Notifications.Volume;
 
         // Health messages honour the configured ping, but — unlike item toasts — AudioOnly does
         // not suppress the toast itself. A bare chime can't tell the user *which* provider broke,
         // and silently dropping a "sync failed" alert is the failure mode this exists to prevent.
         if (style != NotificationStyle.ToastOnly)
         {
-            NotificationSoundPlayer.Play(sound, logger);
+            NotificationSoundPlayer.Play(sound, volume, logger);
         }
 
         if (!IsAvailable)
