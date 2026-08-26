@@ -18,6 +18,9 @@ public sealed partial class InboxViewModel : ObservableObject
     private readonly InboxState _state;
     private readonly ISettingsStore _settings;
 
+    private DateTime _lastRefreshedAtUtc = DateTime.MinValue;
+    private static readonly TimeSpan AutoRefreshThreshold = TimeSpan.FromSeconds(15);
+
     [ObservableProperty]
     private bool _isRefreshing;
 
@@ -36,6 +39,20 @@ public sealed partial class InboxViewModel : ObservableObject
 
     /// <summary>Raised when the user clicks the settings button in the flyout.</summary>
     public event Action? OpenSettingsRequested;
+
+    /// <summary>
+    /// Called whenever the flyout is shown: immediately re-renders time-dependent recency/buckets
+    /// from cache, and triggers a background refresh if data is older than the auto-refresh threshold.
+    /// </summary>
+    public async Task OnFlyoutOpenedAsync()
+    {
+        Application.Current?.Dispatcher.Invoke(() => Rebuild(force: true));
+
+        if (!IsRefreshing && DateTime.UtcNow - _lastRefreshedAtUtc >= AutoRefreshThreshold)
+        {
+            await RefreshAsync();
+        }
+    }
 
     private ObservableCollection<InboxItemViewModel> Items { get; } = new();
 
@@ -56,6 +73,7 @@ public sealed partial class InboxViewModel : ObservableObject
         try
         {
             var result = await _inboxService.RefreshAsync(CancellationToken.None);
+            _lastRefreshedAtUtc = DateTime.UtcNow;
 
             // A provider that failed this refresh means the list the user is looking at is
             // incomplete. Say so rather than letting an unchanged (or emptier) list read as
@@ -190,6 +208,10 @@ public sealed partial class InboxViewModel : ObservableObject
             }
 
             _lastGroupByRepo = groupByRepo;
+        }
+        else if (changed || force)
+        {
+            ItemsView.Refresh();
         }
 
         // Nothing visible moved; skip the status/notify work too.
