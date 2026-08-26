@@ -61,6 +61,11 @@ public partial class InboxFlyout
         _shownAtUtc = DateTime.UtcNow;
         Show();
         ForceForeground();
+
+        if (DataContext is InboxViewModel vm)
+        {
+            _ = vm.OnFlyoutOpenedAsync();
+        }
     }
 
     private void HideFlyout()
