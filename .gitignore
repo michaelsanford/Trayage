@@ -48,4 +48,3 @@ PublishProfiles/
 
 # Code Quality
 *.sarif.json
-!/baseline.sarif.json
