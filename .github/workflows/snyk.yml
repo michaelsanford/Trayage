@@ -37,8 +37,11 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      # snyk/actions/setup is Linux/macOS only and hard-fails with "Windows runner
+      # not currently supported". Trayage targets net10.0-windows, so the job has to
+      # stay on a Windows runner and the CLI gets installed directly instead.
       - name: Install Snyk CLI
-        uses: snyk/actions/setup@12140f4059e244892ae643824a95459a102120dd # master, 2026-08-27
+        run: npm install -g snyk
 
       # Each scan step swallows its exit code so that the SARIF always uploads;
       # the gate step at the end is what actually fails the build.
