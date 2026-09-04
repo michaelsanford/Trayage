@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.Configuration;
@@ -35,6 +35,10 @@ public partial class App
     private Window? _trayHost;
     private bool _notificationsRegistered;
 
+    // Available from the moment the host is built. Defaults to a no-op so the session-end
+    // path can log unconditionally even if Windows ends the session mid-startup.
+    private ILogger _logger = NullLogger.Instance;
+
     /// <summary>True once the user has chosen Quit, so windows stop hiding and actually close.</summary>
     public static bool IsShuttingDown { get; private set; }
 
@@ -44,7 +48,7 @@ public partial class App
 
         RegisterGlobalExceptionHandlers();
 
-        _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out bool createdNew);
+        _singleInstanceMutex = new Mutex(initiallyOwned: false, SingleInstanceMutexName, out bool createdNew);
         if (!createdNew)
         {
             // Another instance owns the tray. When the app is already running a toast click is
@@ -115,13 +119,13 @@ public partial class App
         _trayHost = CreateTrayHostWindow();
         MainWindow = _trayHost;
 
+        _logger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Trayage.App");
+
         _tray = _host.Services.GetRequiredService<TrayIconService>();
         WireTray(_tray);
         _tray.SetParentWindow(_trayHost);
         var registered = _tray.Register();
-        _host.Services.GetRequiredService<ILoggerFactory>()
-            .CreateLogger("Trayage.App")
-            .LogInformation("Tray icon registered: {Registered}", registered);
+        _logger.LogInformation("Tray icon registered: {Registered}", registered);
 
         // Reflect connection + unread state on the tray icon as the inbox changes.
         // Connect/disconnect both trigger a refresh, so this also catches sign-in/out.
@@ -140,6 +144,44 @@ public partial class App
         }
     }
 
+    /// <summary>
+    /// Windows is logging off, shutting down or restarting. The OS allows roughly five seconds
+    /// to answer WM_QUERYENDSESSION and exit before it shows the full-screen "this app is
+    /// preventing shutdown" page — and Trayage qualifies for that page because the off-screen
+    /// tray host counts as a visible top-level window. WPF's default path would fall through to
+    /// <see cref="OnExit"/>, which awaits the host stop and unregisters the toast COM activator;
+    /// either can outlast the budget. So session-end teardown is deliberately minimal: drop the
+    /// tray icon and terminate. Nothing is lost — settings and tokens are written atomically as
+    /// they change, and the file logger is unbuffered.
+    /// </summary>
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        BeginShutdown();
+
+        try
+        {
+            _logger.LogInformation("Session ending ({Reason}); exiting immediately.", e.ReasonSessionEnding);
+            _tray?.Unregister();
+            _logger.LogInformation("Tray icon removed for session end.");
+            base.OnSessionEnding(e);
+            _logger.LogInformation("Session end teardown complete; terminating.");
+        }
+        catch (Exception ex)
+        {
+            // Never let cleanup trouble keep the process alive past the OS budget.
+            CrashLog.Write("SessionEnding", ex);
+        }
+        finally
+        {
+            // Deterministic and immediate, unlike WPF's dispatcher-queued Shutdown().
+            Environment.Exit(0);
+        }
+    }
+
+    /// <summary>
+    /// The user-initiated teardown (tray ▸ Quit). Windows shutdown does not come through here —
+    /// see <see cref="OnSessionEnding"/> — so this path can afford to be graceful.
+    /// </summary>
     protected override async void OnExit(ExitEventArgs e)
     {
         // Only the primary instance registered, so only it unregisters — a second instance
@@ -153,7 +195,17 @@ public partial class App
 
         if (_host is not null)
         {
-            await _host.StopAsync(TimeSpan.FromSeconds(5));
+            try
+            {
+                // InboxPollingService honours its stopping token on both the poll and the
+                // delay, so it stops promptly; a longer timeout would only mask a hang.
+                await _host.StopAsync(TimeSpan.FromSeconds(2));
+            }
+            catch (Exception ex)
+            {
+                CrashLog.Write("HostStop", ex);
+            }
+
             _host.Dispose();
         }
 
@@ -182,9 +234,15 @@ public partial class App
 
     private void Quit()
     {
-        IsShuttingDown = true;
+        BeginShutdown();
         Shutdown();
     }
+
+    /// <summary>
+    /// Marks the app as quitting so windows that normally hide on close (Settings) actually
+    /// close. Shared by the tray Quit menu item and by Windows session end.
+    /// </summary>
+    private static void BeginShutdown() => IsShuttingDown = true;
 
     /// <summary>
     /// Creates a 1×1, off-screen, taskbar-less window purely to provide the tray icon a
