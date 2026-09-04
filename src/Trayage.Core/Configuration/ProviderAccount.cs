@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Trayage.Core.Models;
 
 namespace Trayage.Core.Configuration;
@@ -43,11 +44,13 @@ public sealed class ProviderAccount
     public List<string> WatchedRepositories { get; set; } = new();
 
     /// <summary>Short label for the account list and inbox rows: the nickname, else the login.</summary>
+    [JsonIgnore]
     public string DisplayLabel => Nickname is { Length: > 0 } n
         ? n
         : AccountLogin is { Length: > 0 } l ? l : Provider.DisplayName();
 
     /// <summary>Qualified label used in toasts and error text (e.g. "GitHub · Work").</summary>
+    [JsonIgnore]
     public string QualifiedLabel => $"{Provider.DisplayName()} · {DisplayLabel}";
 
     public ProviderAccount Clone() => new()

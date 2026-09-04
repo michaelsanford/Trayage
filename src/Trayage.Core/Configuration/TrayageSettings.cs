@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Trayage.Core.Models;
 
 namespace Trayage.Core.Configuration;
@@ -126,6 +127,7 @@ public sealed class TrayageSettings
     /// repo watched?" — the item already came from the account that watches it, so the union
     /// is the right set to test against.
     /// </summary>
+    [JsonIgnore]
     public IReadOnlyCollection<string> AllWatchedRepositories =>
         Accounts.SelectMany(a => a.WatchedRepositories).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 

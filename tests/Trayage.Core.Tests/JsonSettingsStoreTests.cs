@@ -222,4 +222,21 @@ public sealed class JsonSettingsStoreTests : IDisposable
         Assert.Equal(new[] { "acme/widgets" }, settings.WatchedRepositories);
         Assert.Empty(settings.Accounts);
     }
+    [Fact]
+    public void Save_DoesNotWriteComputedProperties()
+    {
+        // DisplayLabel/QualifiedLabel/AllWatchedRepositories are derived and read-only, so
+        // serialising them would only bloat a file the user is meant to be able to read.
+        var store = NewStore();
+        var settings = store.Load();
+        settings.Accounts.Add(new ProviderAccount { Id = "a", Provider = ProviderKind.GitHub, Nickname = "Work" });
+        store.Save(settings);
+
+        var json = File.ReadAllText(_path);
+
+        Assert.DoesNotContain("DisplayLabel", json);
+        Assert.DoesNotContain("QualifiedLabel", json);
+        Assert.DoesNotContain("AllWatchedRepositories", json);
+        Assert.Contains("Nickname", json);
+    }
 }
