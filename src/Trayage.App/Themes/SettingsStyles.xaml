@@ -29,6 +29,14 @@
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
     </Style>
 
+    <!-- The bold title line of a card. Foreground is explicit: inside a CardExpander header the
+         inherited Foreground isn't the primary text brush, so a bare TextBlock renders
+         dark-on-dark in dark mode. -->
+    <Style x:Key="CardTitleTextStyle" TargetType="TextBlock">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+    </Style>
+
     <!-- Secondary/metadata text: card sub-lines, status messages, hints. -->
     <Style x:Key="CaptionTextStyle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="12" />
@@ -45,18 +53,25 @@
         <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
     </Style>
 
-    <!-- Uniform vertical rhythm for the card stacks that make up every page. -->
-    <Style x:Key="SettingsCardStyle" TargetType="ui:CardControl">
+    <!-- Uniform vertical rhythm for the card stacks that make up every page.
+
+         These MUST derive from WPF-UI's implicit style. Applying a keyed style to a themed
+         control replaces the implicit one wholesale — including its ControlTemplate — which
+         silently drops the card chrome and stops the Header from rendering at all. -->
+    <Style x:Key="SettingsCardStyle" TargetType="ui:CardControl"
+           BasedOn="{StaticResource {x:Type ui:CardControl}}">
         <Setter Property="Margin" Value="0,0,0,8" />
     </Style>
 
-    <Style x:Key="SettingsCardExpanderStyle" TargetType="ui:CardExpander">
+    <Style x:Key="SettingsCardExpanderStyle" TargetType="ui:CardExpander"
+           BasedOn="{StaticResource {x:Type ui:CardExpander}}">
         <Setter Property="Margin" Value="0,0,0,8" />
     </Style>
 
     <!-- The 2px indeterminate progress bar the inbox flyout uses for its busy state, so a
          loading Settings pane reads the same way. -->
-    <Style x:Key="BusyProgressStyle" TargetType="ProgressBar">
+    <Style x:Key="BusyProgressStyle" TargetType="ProgressBar"
+           BasedOn="{StaticResource {x:Type ProgressBar}}">
         <Setter Property="Height" Value="2" />
         <Setter Property="IsIndeterminate" Value="True" />
         <Setter Property="VerticalAlignment" Value="Top" />

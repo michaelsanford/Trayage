@@ -40,7 +40,7 @@
                               VerticalAlignment="Center" Margin="0,0,14,0" />
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding DisplayLabel}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding DisplayLabel}" Style="{StaticResource CardTitleTextStyle}" />
                             <TextBlock Text="{Binding SubtitleLabel}" Style="{StaticResource CaptionTextStyle}" />
                         </StackPanel>
 
@@ -110,7 +110,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}" Margin="0,12,0,8">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Include in the inbox" FontWeight="SemiBold" />
+                                    <TextBlock Text="Include in the inbox" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Turn off to pause this account without disconnecting it — the token is kept."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -174,7 +174,7 @@
                                                                           IsExpanded="{Binding DataContext.RepoFilterActive, RelativeSource={RelativeSource AncestorType=ItemsControl}, Mode=OneWay}">
                                                                     <Expander.Header>
                                                                         <StackPanel Orientation="Horizontal" d:DataContext="{d:DesignInstance CollectionViewGroup}">
-                                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                                            <TextBlock Text="{Binding Name}" Style="{StaticResource CardTitleTextStyle}" />
                                                                             <TextBlock Text="{Binding ItemCount, StringFormat=' ({0})'}"
                                                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                                                         </StackPanel>
@@ -459,7 +459,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Notification style" FontWeight="SemiBold" />
+                                    <TextBlock Text="Notification style" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Show a toast, play a sound, or both."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -474,7 +474,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Notification sound" FontWeight="SemiBold" />
+                                    <TextBlock Text="Notification sound" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Which audio ping plays for new activity."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -490,7 +490,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}" IsEnabled="{Binding SoundSelectionEnabled}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Notification volume" FontWeight="SemiBold" />
+                                    <TextBlock Text="Notification volume" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="How loud the audio alert plays."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -528,7 +528,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Review requests" FontWeight="SemiBold" />
+                                    <TextBlock Text="Review requests" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Someone asked you to review a pull request."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -539,7 +539,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Mentions and assignments" FontWeight="SemiBold" />
+                                    <TextBlock Text="Mentions and assignments" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="You were @-mentioned, or an issue or PR was assigned to you."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -550,7 +550,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="CI / check status changes" FontWeight="SemiBold" />
+                                    <TextBlock Text="CI / check status changes" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="A build or check finished on one of your pull requests."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -561,7 +561,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="All activity on watched repositories" FontWeight="SemiBold" />
+                                    <TextBlock Text="All activity on watched repositories" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Anything at all in the repositories you watch, even when you're not involved."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -572,7 +572,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Issues &amp; PRs I'm involved in" FontWeight="SemiBold" />
+                                    <TextBlock Text="Issues &amp; PRs I'm involved in" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Follow-up activity on threads you authored or joined."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -592,7 +592,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Group by repository" FontWeight="SemiBold" />
+                                    <TextBlock Text="Group by repository" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Group inbox items under each repository. Off shows a single newest-first list."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -603,7 +603,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Show read items" FontWeight="SemiBold" />
+                                    <TextBlock Text="Show read items" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Keep already-read items in the inbox (dimmed). Off shows only unread items."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -614,7 +614,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Surface recently-modified items" FontWeight="SemiBold" />
+                                    <TextBlock Text="Surface recently-modified items" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Show and notify on recently-updated items even if GitHub already marks them read (within ~2× the poll interval)."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -634,7 +634,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Check for new activity every" FontWeight="SemiBold" />
+                                    <TextBlock Text="Check for new activity every" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Applies to every account. A provider may ask for a slower floor."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -648,7 +648,7 @@
 
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
-                                <TextBlock Text="Theme" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock Text="Theme" Style="{StaticResource CardTitleTextStyle}" VerticalAlignment="Center" />
                             </ui:CardControl.Header>
                             <ComboBox ItemsSource="{Binding Themes}"
                                       SelectedItem="{Binding SelectedTheme}"
@@ -658,7 +658,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Start with Windows" FontWeight="SemiBold" />
+                                    <TextBlock Text="Start with Windows" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Launch Trayage automatically when you sign in."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -671,7 +671,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Verbose logging" FontWeight="SemiBold" />
+                                    <TextBlock Text="Verbose logging" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Capture detailed (debug) logs for bug reports. Applies after restart."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -682,7 +682,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Diagnostic logs" FontWeight="SemiBold" />
+                                    <TextBlock Text="Diagnostic logs" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Stored locally; contain no account names or tokens, so they're safe to attach to a bug report."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
@@ -704,7 +704,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Version" FontWeight="SemiBold" />
+                                    <TextBlock Text="Version" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="{Binding AppVersion}" Style="{StaticResource MonoCaptionTextStyle}" />
                                 </StackPanel>
                             </ui:CardControl.Header>
@@ -716,7 +716,7 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Source and issues" FontWeight="SemiBold" />
+                                    <TextBlock Text="Source and issues" Style="{StaticResource CardTitleTextStyle}" />
                                     <TextBlock Text="Every release ships with build provenance, a cosign signature, and an SBOM."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
