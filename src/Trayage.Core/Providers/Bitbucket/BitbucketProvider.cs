@@ -4,7 +4,6 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
 using Trayage.Core.Models;
 using Trayage.Core.Security;
@@ -49,10 +48,14 @@ public sealed class BitbucketProvider : IInboxProvider
     private const string ApiBase = "https://api.bitbucket.org/2.0";
     private const int MaxPagesPerQuery = 5;
 
+    // Bitbucket's consumer callback is a fixed loopback port, so only one account can run the
+    // authorization-code flow at a time; a second concurrent attempt would fail to bind.
+    private static readonly SemaphoreSlim ConnectGate = new(1, 1);
+
     private readonly BitbucketOptions _options;
+    private readonly ProviderAccountContext _account;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ISecretStore _secrets;
-    private readonly ISettingsStore _settings;
     private readonly ILogger<BitbucketProvider> _logger;
 
     private string? _accessToken;
@@ -62,21 +65,25 @@ public sealed class BitbucketProvider : IInboxProvider
 
     public BitbucketProvider(
         IOptions<BitbucketOptions> options,
+        ProviderAccountContext account,
         IHttpClientFactory httpClientFactory,
         ISecretStore secrets,
-        ISettingsStore settings,
         ILogger<BitbucketProvider> logger)
     {
         _options = options.Value;
+        _account = account;
         _httpClientFactory = httpClientFactory;
         _secrets = secrets;
-        _settings = settings;
         _logger = logger;
 
         RestoreSession();
     }
 
     public ProviderKind Provider => ProviderKind.Bitbucket;
+
+    public string AccountId => _account.AccountId;
+
+    public string DisplayLabel => _account.QualifiedLabel;
 
     public bool IsConnected { get; private set; }
 
@@ -89,7 +96,30 @@ public sealed class BitbucketProvider : IInboxProvider
     /// the authorize URL to launch; the method then waits for Bitbucket to redirect back
     /// to the loopback listener and exchanges the returned code for tokens.
     /// </summary>
+    /// <remarks>
+    /// Serialised across all Bitbucket accounts: the consumer's callback URL pins a single
+    /// loopback port, so two accounts authorizing at once would collide on the listener.
+    /// </remarks>
     public async Task ConnectAsync(Func<Uri, Task> openBrowser, CancellationToken cancellationToken)
+    {
+        if (!await ConnectGate.WaitAsync(TimeSpan.Zero, cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException(
+                "Another Bitbucket account is being connected right now. Finish that one first — " +
+                "Bitbucket's callback uses a single fixed port, so only one can run at a time.");
+        }
+
+        try
+        {
+            await ConnectCoreAsync(openBrowser, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ConnectGate.Release();
+        }
+    }
+
+    private async Task ConnectCoreAsync(Func<Uri, Task> openBrowser, CancellationToken cancellationToken)
     {
         if (!_options.IsConfigured)
         {
@@ -153,8 +183,7 @@ public sealed class BitbucketProvider : IInboxProvider
 
     public void Disconnect()
     {
-        _secrets.Remove(SecretKeys.BitbucketAccessToken);
-        _secrets.Remove(SecretKeys.BitbucketRefreshToken);
+        _account.PurgeSecrets();
         _accessToken = null;
         _accessExpiresUtc = DateTimeOffset.MinValue;
         _userUuid = null;
@@ -424,19 +453,19 @@ public sealed class BitbucketProvider : IInboxProvider
             var authorUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN&q={Uri.EscapeDataString($"author.uuid=\"{uuid}\"")}";
             foreach (var pr in await GetAllPullRequestsAsync(authorUrl, ct).ConfigureAwait(false))
             {
-                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.Assignment, repo));
+                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.Assignment, repo, AccountId));
             }
 
             var reviewerUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN&q={Uri.EscapeDataString($"reviewers.uuid=\"{uuid}\"")}";
             foreach (var pr in await GetAllPullRequestsAsync(reviewerUrl, ct).ConfigureAwait(false))
             {
-                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.ReviewRequest, repo));
+                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.ReviewRequest, repo, AccountId));
             }
 
             var allUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN";
             foreach (var pr in await GetAllPullRequestsAsync(allUrl, ct).ConfigureAwait(false))
             {
-                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.RepoActivity, repo));
+                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.RepoActivity, repo, AccountId));
             }
             return list;
         }
@@ -583,7 +612,7 @@ public sealed class BitbucketProvider : IInboxProvider
             return _accessToken;
         }
 
-        var refreshToken = _secrets.Get(SecretKeys.BitbucketRefreshToken);
+        var refreshToken = _secrets.Get(_account.RefreshTokenKey);
         if (refreshToken is null)
         {
             return null;
@@ -659,31 +688,26 @@ public sealed class BitbucketProvider : IInboxProvider
 
         if (!string.IsNullOrEmpty(token.AccessToken))
         {
-            _secrets.Set(SecretKeys.BitbucketAccessToken, token.AccessToken);
+            _secrets.Set(_account.AccessTokenKey, token.AccessToken);
         }
 
         if (!string.IsNullOrEmpty(token.RefreshToken))
         {
-            _secrets.Set(SecretKeys.BitbucketRefreshToken, token.RefreshToken);
+            _secrets.Set(_account.RefreshTokenKey, token.RefreshToken);
         }
     }
 
     private void RestoreSession()
     {
-        if (_secrets.Contains(SecretKeys.BitbucketRefreshToken))
+        if (_secrets.Contains(_account.RefreshTokenKey))
         {
             IsConnected = true;
-            AccountLogin = _settings.Load().Bitbucket.AccountLogin;
+            AccountLogin = _account.AccountLogin;
         }
     }
 
-    private void PersistConnectionState(bool connected, string? login)
-    {
-        var settings = _settings.Load();
-        settings.Bitbucket.Connected = connected;
-        settings.Bitbucket.AccountLogin = login;
-        _settings.Save(settings);
-    }
+    private void PersistConnectionState(bool connected, string? login) =>
+        _account.PersistConnection(connected, login);
 
     private static async Task WriteBrowserResponseAsync(HttpListenerResponse response, bool success)
     {

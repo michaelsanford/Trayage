@@ -1,20 +1,16 @@
 using System.IO;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Windows;
-using System.Windows.Data;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Trayage.App.Notifications;
 using Trayage.App.Services;
 using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
+using Trayage.Core.Models;
 using Trayage.Core.Notifications;
 using Trayage.Core.Providers;
-using Trayage.Core.Providers.Bitbucket;
-using Trayage.Core.Providers.GitHub;
-using Trayage.Core.Providers.GitLab;
 
 // ReSharper disable UnusedParameterInPartialMethod
 
@@ -27,53 +23,28 @@ public sealed record PollIntervalOption(string Label, int Seconds);
 public sealed record NotificationStyleOption(string Label, NotificationStyle Style);
 
 public sealed record NotificationSoundOption(string Label, string Value);
+
+/// <summary>An entry in the "Add account" menu: which provider a new account would connect to.</summary>
+public sealed record AddAccountOption(string Label, ProviderKind Provider);
 // ReSharper restore NotAccessedPositionalProperty.Global
 
 /// <summary>
-/// One row in the Bitbucket watched-repo picker: a discovered repository and whether it is
-/// currently watched. Flipping <see cref="IsWatched"/> notifies the owning view-model so it
-/// can update (and persist) the watched set.
+/// Drives the Settings window: the connected accounts, notification rules, inbox display, and
+/// general options. Changes persist immediately so there is no explicit Save step.
 /// </summary>
-public sealed partial class WatchedRepoOption : ObservableObject
-{
-    private readonly Action<WatchedRepoOption, bool> _onToggled;
-
-    public WatchedRepoOption(string fullName, string displayName, bool isWatched, Action<WatchedRepoOption, bool> onToggled)
-    {
-        FullName = fullName;
-        DisplayName = displayName;
-        // "workspace/repo-slug" — the segment before the slash is the workspace the picker groups on.
-        var slash = fullName.IndexOf('/');
-        Workspace = slash > 0 ? fullName[..slash] : fullName;
-        _isWatched = isWatched;
-        _onToggled = onToggled;
-    }
-
-    public string FullName { get; }
-
-    public string DisplayName { get; }
-
-    /// <summary>Workspace slug, used to group the picker.</summary>
-    public string Workspace { get; }
-
-    [ObservableProperty] private bool _isWatched;
-
-    partial void OnIsWatchedChanged(bool value) => _onToggled(this, value);
-}
-
-/// <summary>
-/// Drives the Settings window: account connections, notification rules, watched repos,
-/// and general options. Changes persist immediately so there is no explicit Save step.
-/// </summary>
+/// <remarks>
+/// Per-account state lives on <see cref="ProviderAccountViewModel"/>, one per row of
+/// <see cref="TrayageSettings.Accounts"/> — this class only owns settings that apply app-wide.
+/// </remarks>
 public sealed partial class SettingsViewModel : ObservableObject
 {
     // Official Windows App Runtime download page (the runtime that backs Windows toasts).
     private const string NotificationRuntimeDownloadUrl = "https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads";
 
+    private const string ProjectUrl = "https://github.com/michaelsanford/Trayage";
+
     private readonly ISettingsStore _settings;
-    private readonly GitHubProvider _gitHub;
-    private readonly BitbucketProvider _bitbucket;
-    private readonly GitLabProvider _gitlab;
+    private readonly ProviderRegistry _registry;
     private readonly InboxService _inboxService;
     private readonly IToastNotifier _notifier;
     private bool _loading;
@@ -95,58 +66,51 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _showReadItems;
     [ObservableProperty] private bool _surfaceRecentlyModified;
 
-    [ObservableProperty] private bool _gitHubConnected;
-    [ObservableProperty] private string _gitHubAccountLabel = "Not connected";
-    [ObservableProperty] private bool _gitHubBusy;
-    [ObservableProperty] private string _gitHubDeviceInstruction = string.Empty;
-    [ObservableProperty] private string _gitHubUserCode = string.Empty;
-
-    [ObservableProperty] private bool _bitbucketConnected;
-    [ObservableProperty] private string _bitbucketAccountLabel = "Not connected";
-    [ObservableProperty] private bool _bitbucketBusy;
-    [ObservableProperty] private string _bitbucketStatus = string.Empty;
-
-    [ObservableProperty] private bool _gitLabConnected;
-    [ObservableProperty] private string _gitLabAccountLabel = "Not connected";
-    [ObservableProperty] private bool _gitLabBusy;
-    [ObservableProperty] private string _gitLabDeviceInstruction = string.Empty;
-    [ObservableProperty] private string _gitLabUserCode = string.Empty;
-
-    [ObservableProperty] private string _newWatchedRepo = string.Empty;
-    [ObservableProperty] private string _watchedRepoError = string.Empty;
-
-    [ObservableProperty] private bool _isLoadingRepos;
-    [ObservableProperty] private string _repoLoadStatus = string.Empty;
-    [ObservableProperty] private string _repoFilter = string.Empty;
-
-    // Guards the IsWatched change handler while we populate the picker programmatically, so
-    // pre-checking discovered repos doesn't re-persist or re-fetch.
-    private bool _populatingRepos;
-
-    // Set once the Bitbucket tab has triggered an automatic discovery load, so revisiting the
-    // tab doesn't re-hit the API; manual "Refresh" always reloads regardless.
-    private bool _reposAutoLoaded;
-
-    public SettingsViewModel(ISettingsStore settings, GitHubProvider gitHub, BitbucketProvider bitbucket, GitLabProvider gitlab, InboxService inboxService, IToastNotifier notifier)
+    public SettingsViewModel(
+        ISettingsStore settings,
+        ProviderRegistry registry,
+        InboxService inboxService,
+        IToastNotifier notifier)
     {
         _settings = settings;
-        _gitHub = gitHub;
-        _bitbucket = bitbucket;
-        _gitlab = gitlab;
+        _registry = registry;
         _inboxService = inboxService;
         _notifier = notifier;
 
         Load();
+        LoadAccounts();
     }
 
     /// <summary>Raised when an inbox display option (grouping / show-read) changes.</summary>
     public event Action? InboxDisplayChanged;
+
+    /// <summary>Raised when accounts are added, removed, renamed, or paused.</summary>
+    public event Action? AccountsChanged;
+
+    /// <summary>The connected accounts, in the order they were added.</summary>
+    public ObservableCollection<ProviderAccountViewModel> Accounts { get; } = new();
+
+    public bool HasNoAccounts => Accounts.Count == 0;
+
+    public IReadOnlyList<AddAccountOption> AddAccountOptions { get; } = new[]
+    {
+        new AddAccountOption("GitHub", ProviderKind.GitHub),
+        new AddAccountOption("Bitbucket Cloud", ProviderKind.Bitbucket),
+        new AddAccountOption("GitLab", ProviderKind.GitLab),
+    };
 
     /// <summary>
     /// True when Windows can't deliver toasts on this PC (the Windows App Runtime is
     /// missing). The Notifications pane surfaces a warning and an install link when set.
     /// </summary>
     public bool ToastsUnavailable => !_notifier.IsAvailable;
+
+    /// <summary>The running build, shown on the About page.</summary>
+    public string AppVersion =>
+        Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            is { Length: > 0 } informational
+            ? informational.Split('+')[0]
+            : Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
 
     /// <summary>
     /// Re-checks toast availability. Called when the window is shown so installing the
@@ -157,35 +121,101 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private static void OpenNotificationRuntimeHelp() => InboxViewModel.OpenUrl(NotificationRuntimeDownloadUrl);
 
-    public ObservableCollection<string> WatchedRepositories { get; } = new();
+    [RelayCommand]
+    private static void OpenProject() => InboxViewModel.OpenUrl(ProjectUrl);
 
-    /// <summary>Discovered Bitbucket repositories shown as toggles in the picker.</summary>
-    public ObservableCollection<WatchedRepoOption> BitbucketRepoOptions { get; } = new();
+    [RelayCommand]
+    private static void OpenReleases() => InboxViewModel.OpenUrl($"{ProjectUrl}/releases");
 
-    /// <summary>Name-filtered view over <see cref="BitbucketRepoOptions"/> for the search box.</summary>
-    public ICollectionView BitbucketRepoView => field ??= CreateRepoView();
-
-    private ICollectionView CreateRepoView()
+    /// <summary>
+    /// Creates an account row, registers a provider for it, and immediately starts its connect
+    /// flow — "Add account" and "Connect" are one gesture from the user's point of view.
+    /// </summary>
+    [RelayCommand]
+    private async Task AddAccountAsync(AddAccountOption? option)
     {
-        var view = CollectionViewSource.GetDefaultView(BitbucketRepoOptions);
-        view.Filter = o => o is WatchedRepoOption opt
-            && (string.IsNullOrWhiteSpace(RepoFilter)
-                || opt.FullName.Contains(RepoFilter, StringComparison.OrdinalIgnoreCase));
+        if (option is null)
+        {
+            return;
+        }
 
-        // Group into collapsible workspace sections, alphabetical within each.
-        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(WatchedRepoOption.Workspace)));
-        view.SortDescriptions.Add(new SortDescription(nameof(WatchedRepoOption.Workspace), ListSortDirection.Ascending));
-        view.SortDescriptions.Add(new SortDescription(nameof(WatchedRepoOption.DisplayName), ListSortDirection.Ascending));
-        return view;
+        var account = new ProviderAccount
+        {
+            Id = ProviderAccount.NewId(),
+            Provider = option.Provider,
+        };
+
+        var current = _settings.Load();
+        current.Accounts.Add(account);
+        _settings.Save(current);
+
+        var provider = _registry.Add(account);
+        var viewModel = NewAccountViewModel(provider, account);
+        Accounts.Add(viewModel);
+        OnPropertyChanged(nameof(HasNoAccounts));
+        AccountsChanged?.Invoke();
+
+        await viewModel.ConnectCommand.ExecuteAsync(null);
+
+        // An abandoned or failed authorization would otherwise leave an empty card behind.
+        if (!viewModel.Connected)
+        {
+            RemoveAccount(viewModel);
+        }
     }
 
-    /// <summary>True while a filter is typed — the picker expands matching groups so results show.</summary>
-    public bool RepoFilterActive => !string.IsNullOrWhiteSpace(RepoFilter);
-
-    partial void OnRepoFilterChanged(string value)
+    [RelayCommand]
+    private void RemoveAccount(ProviderAccountViewModel? account)
     {
-        BitbucketRepoView.Refresh();
-        OnPropertyChanged(nameof(RepoFilterActive));
+        if (account is null)
+        {
+            return;
+        }
+
+        // Disconnecting first revokes the live session; Remove then purges the row and its tokens.
+        if (account.Connected)
+        {
+            account.DisconnectCommand.Execute(null);
+        }
+
+        _registry.Remove(account.AccountId);
+        Accounts.Remove(account);
+        OnPropertyChanged(nameof(HasNoAccounts));
+        AccountsChanged?.Invoke();
+        _ = _inboxService.RefreshAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Kicks off repository discovery for every Bitbucket account. Called when the Accounts page
+    /// is shown, so the pickers are populated by the time a card is expanded.
+    /// </summary>
+    public void EnsureAccountReposLoaded()
+    {
+        foreach (var account in Accounts)
+        {
+            account.EnsureReposLoaded();
+        }
+    }
+
+    private void LoadAccounts()
+    {
+        Accounts.Clear();
+        foreach (var account in _settings.Load().Accounts)
+        {
+            if (_registry.Find(account.Id) is { } provider)
+            {
+                Accounts.Add(NewAccountViewModel(provider, account));
+            }
+        }
+
+        OnPropertyChanged(nameof(HasNoAccounts));
+    }
+
+    private ProviderAccountViewModel NewAccountViewModel(IInboxProvider provider, ProviderAccount account)
+    {
+        var viewModel = new ProviderAccountViewModel(provider, account, _settings, _inboxService);
+        viewModel.Changed += () => AccountsChanged?.Invoke();
+        return viewModel;
     }
 
     public IReadOnlyList<AppTheme> Themes { get; } = new[] { AppTheme.System, AppTheme.Light, AppTheme.Dark };
@@ -211,7 +241,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public bool SoundSelectionEnabled => SelectedNotificationStyle != NotificationStyle.ToastOnly;
 
-    private IReadOnlyList<NotificationSoundOption> LoadAvailableSounds()
+    private static IReadOnlyList<NotificationSoundOption> LoadAvailableSounds()
     {
         var list = new List<NotificationSoundOption>();
         try
@@ -263,383 +293,20 @@ public sealed partial class SettingsViewModel : ObservableObject
         NotificationSoundPlayer.Play(soundName, volume ?? NotificationVolume);
     }
 
-    [RelayCommand]
-    private async Task ConnectGitHubAsync()
-    {
-        if (GitHubBusy)
-        {
-            return;
-        }
-
-        GitHubBusy = true;
-        GitHubUserCode = string.Empty;
-        GitHubDeviceInstruction = "Requesting a device code from GitHub…";
-        try
-        {
-            await _gitHub.ConnectAsync(prompt =>
-            {
-                GitHubUserCode = prompt.UserCode;
-                GitHubDeviceInstruction = $"Enter this code at {prompt.VerificationUri} (opening your browser…):";
-                InboxViewModel.OpenUrl(prompt.VerificationUri);
-                return Task.CompletedTask;
-            }, CancellationToken.None);
-
-            GitHubConnected = _gitHub.IsConnected;
-            GitHubAccountLabel = _gitHub.AccountLogin is { } login ? $"Connected as {login}" : "Connected";
-            GitHubUserCode = string.Empty;
-            GitHubDeviceInstruction = string.Empty;
-            _ = _inboxService.RefreshAsync(CancellationToken.None);
-        }
-        catch (ProviderNotConfiguredException ex)
-        {
-            GitHubUserCode = string.Empty;
-            GitHubDeviceInstruction = ex.Message;
-        }
-        catch (Exception ex)
-        {
-            GitHubUserCode = string.Empty;
-            GitHubDeviceInstruction = $"Connection failed: {ex.Message}";
-        }
-        finally
-        {
-            GitHubBusy = false;
-        }
-    }
-
-    [RelayCommand]
-    private void CopyGitHubCode()
-    {
-        if (string.IsNullOrEmpty(GitHubUserCode))
-        {
-            return;
-        }
-
-        try
-        {
-            Clipboard.SetText(GitHubUserCode);
-        }
-        catch (Exception)
-        {
-            // Clipboard access can transiently fail; not worth surfacing.
-        }
-    }
-
-    [RelayCommand]
-    private void DisconnectGitHub()
-    {
-        _gitHub.Disconnect();
-        GitHubConnected = false;
-        GitHubAccountLabel = "Not connected";
-        GitHubUserCode = string.Empty;
-        GitHubDeviceInstruction = string.Empty;
-        _ = _inboxService.RefreshAsync(CancellationToken.None);
-    }
-
-    [RelayCommand]
-    private async Task ConnectBitbucketAsync()
-    {
-        if (BitbucketBusy)
-        {
-            return;
-        }
-
-        BitbucketBusy = true;
-        BitbucketStatus = "Opening your browser to authorize Bitbucket…";
-        try
-        {
-            await _bitbucket.ConnectAsync(uri =>
-            {
-                InboxViewModel.OpenUrl(uri.ToString());
-                return Task.CompletedTask;
-            }, CancellationToken.None);
-
-            BitbucketConnected = _bitbucket.IsConnected;
-            BitbucketAccountLabel = _bitbucket.AccountLogin is { } login ? $"Connected as {login}" : "Connected";
-            BitbucketStatus = string.Empty;
-            _ = _inboxService.RefreshAsync(CancellationToken.None);
-        }
-        catch (ProviderNotConfiguredException ex)
-        {
-            BitbucketStatus = ex.Message;
-        }
-        catch (Exception ex)
-        {
-            BitbucketStatus = $"Connection failed: {ex.Message}";
-        }
-        finally
-        {
-            BitbucketBusy = false;
-        }
-    }
-
-    [RelayCommand]
-    private void DisconnectBitbucket()
-    {
-        _bitbucket.Disconnect();
-        BitbucketConnected = false;
-        BitbucketAccountLabel = "Not connected";
-        BitbucketStatus = string.Empty;
-        _ = _inboxService.RefreshAsync(CancellationToken.None);
-    }
-
-    [RelayCommand]
-    private async Task ConnectGitLabAsync()
-    {
-        if (GitLabBusy)
-        {
-            return;
-        }
-
-        GitLabBusy = true;
-        GitLabUserCode = string.Empty;
-        GitLabDeviceInstruction = "Requesting a device code from GitLab…";
-        try
-        {
-            await _gitlab.ConnectAsync(prompt =>
-            {
-                GitLabUserCode = prompt.UserCode;
-                GitLabDeviceInstruction = $"Enter this code at {prompt.VerificationUri} (opening your browser…):";
-                InboxViewModel.OpenUrl(prompt.VerificationUri);
-                return Task.CompletedTask;
-            }, CancellationToken.None);
-
-            GitLabConnected = _gitlab.IsConnected;
-            GitLabAccountLabel = _gitlab.AccountLogin is { } login ? $"Connected as {login}" : "Connected";
-            GitLabUserCode = string.Empty;
-            GitLabDeviceInstruction = string.Empty;
-            _ = _inboxService.RefreshAsync(CancellationToken.None);
-        }
-        catch (ProviderNotConfiguredException ex)
-        {
-            GitLabUserCode = string.Empty;
-            GitLabDeviceInstruction = ex.Message;
-        }
-        catch (Exception ex)
-        {
-            GitLabUserCode = string.Empty;
-            GitLabDeviceInstruction = $"Connection failed: {ex.Message}";
-        }
-        finally
-        {
-            GitLabBusy = false;
-        }
-    }
-
-    [RelayCommand]
-    private void CopyGitLabCode()
-    {
-        if (string.IsNullOrEmpty(GitLabUserCode))
-        {
-            return;
-        }
-
-        try
-        {
-            Clipboard.SetText(GitLabUserCode);
-        }
-        catch (Exception)
-        {
-            // Clipboard access can transiently fail; not worth surfacing.
-        }
-    }
-
-    [RelayCommand]
-    private void DisconnectGitLab()
-    {
-        _gitlab.Disconnect();
-        GitLabConnected = false;
-        GitLabAccountLabel = "Not connected";
-        GitLabUserCode = string.Empty;
-        GitLabDeviceInstruction = string.Empty;
-        _ = _inboxService.RefreshAsync(CancellationToken.None);
-    }
-
     /// <summary>
-    /// Triggers a one-time automatic repository discovery the first time the Bitbucket tab is
-    /// shown while connected. Subsequent tab visits are no-ops (the result is cached for the
-    /// window's lifetime); the manual "Refresh" button reloads on demand.
+    /// Commits the volume once the slider is released. The slider binds with
+    /// <c>UpdateSourceTrigger=PropertyChanged</c> so the readout tracks the thumb, but writing
+    /// settings.json and replaying the preview on every tick would mean a file write per pixel.
     /// </summary>
-    public void EnsureBitbucketReposLoaded()
+    public void CommitVolume()
     {
-        if (_reposAutoLoaded || !BitbucketConnected || IsLoadingRepos)
-        {
-            return;
-        }
-
-        _reposAutoLoaded = true;
-        if (LoadBitbucketReposCommand.CanExecute(null))
-        {
-            LoadBitbucketReposCommand.Execute(null);
-        }
-    }
-
-    [RelayCommand]
-    private async Task LoadBitbucketReposAsync()
-    {
-        if (IsLoadingRepos)
-        {
-            return;
-        }
-
-        if (!BitbucketConnected)
-        {
-            RepoLoadStatus = "Connect Bitbucket first to load your repositories.";
-            return;
-        }
-
-        IsLoadingRepos = true;
-        RepoLoadStatus = "Loading your Bitbucket repositories…";
-        try
-        {
-            var result = await _bitbucket.ListAccessibleRepositoriesAsync(CancellationToken.None);
-
-            _populatingRepos = true;
-            BitbucketRepoOptions.Clear();
-            var watched = new HashSet<string>(WatchedRepositories, StringComparer.OrdinalIgnoreCase);
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var repo in result.Repositories)
-            {
-                if (seen.Add(repo.FullName))
-                {
-                    BitbucketRepoOptions.Add(NewOption(repo.FullName, repo.Name, watched.Contains(repo.FullName)));
-                }
-            }
-
-            // Watched repos discovery didn't return (added manually, or beyond the page cap)
-            // still appear, pre-checked, so the picker shows the full watched set.
-            foreach (var repo in WatchedRepositories)
-            {
-                if (seen.Add(repo))
-                {
-                    BitbucketRepoOptions.Add(NewOption(repo, repo, isWatched: true));
-                }
-            }
-
-            _populatingRepos = false;
-            BitbucketRepoView.Refresh();
-
-            // Three distinct outcomes: a degraded fetch (something failed — don't imply the
-            // account is empty), a genuinely empty account, or a normal list.
-            if (result.Partial)
-            {
-                RepoLoadStatus = result.Warning ?? "Some repositories may be missing. See logs, or add a repo manually.";
-            }
-            else if (BitbucketRepoOptions.Count == 0)
-            {
-                RepoLoadStatus = "No repositories found for this account.";
-            }
-            else
-            {
-                RepoLoadStatus = $"{BitbucketRepoOptions.Count} repositories — toggle the ones you want to watch.";
-            }
-        }
-        catch (Exception ex)
-        {
-            _populatingRepos = false;
-            RepoLoadStatus = $"Couldn't load repositories: {ex.Message}";
-        }
-        finally
-        {
-            IsLoadingRepos = false;
-        }
-    }
-
-    [RelayCommand]
-    private void AddWatchedRepo()
-    {
-        WatchedRepoError = string.Empty;
-        var repo = RepositoryReference.Normalize(NewWatchedRepo);
-        if (repo is null)
-        {
-            WatchedRepoError = "Enter a repository as owner/repo, or paste its Bitbucket URL.";
-            return;
-        }
-
-        WatchRepo(repo);
-        SyncOptionState(repo, isWatched: true);
-        NewWatchedRepo = string.Empty;
-    }
-
-    [RelayCommand]
-    private void RemoveWatchedRepo(string? repo)
-    {
-        if (repo is null)
-        {
-            return;
-        }
-
-        UnwatchRepo(repo);
-        SyncOptionState(repo, isWatched: false);
-    }
-
-    private WatchedRepoOption NewOption(string fullName, string displayName, bool isWatched)
-        => new(fullName, displayName, isWatched, OnRepoToggled);
-
-    private void OnRepoToggled(WatchedRepoOption option, bool isWatched)
-    {
-        if (_populatingRepos)
-        {
-            return;
-        }
-
-        if (isWatched)
-        {
-            WatchRepo(option.FullName);
-        }
-        else
-        {
-            UnwatchRepo(option.FullName);
-        }
-    }
-
-    private void WatchRepo(string fullName)
-    {
-        if (WatchedRepositories.Contains(fullName, StringComparer.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        WatchedRepositories.Add(fullName);
-        Persist();
-        _ = _inboxService.RefreshAsync(CancellationToken.None);
-    }
-
-    private void UnwatchRepo(string fullName)
-    {
-        var existing = WatchedRepositories.FirstOrDefault(r => string.Equals(r, fullName, StringComparison.OrdinalIgnoreCase));
-        if (existing is null || !WatchedRepositories.Remove(existing))
+        if (_loading)
         {
             return;
         }
 
         Persist();
-        _ = _inboxService.RefreshAsync(CancellationToken.None);
-    }
-
-    /// <summary>Keeps a loaded picker toggle in sync when the watched set changes elsewhere.</summary>
-    private void SyncOptionState(string fullName, bool isWatched)
-    {
-        var option = BitbucketRepoOptions.FirstOrDefault(o => string.Equals(o.FullName, fullName, StringComparison.OrdinalIgnoreCase));
-        if (option is null)
-        {
-            if (isWatched)
-            {
-                _populatingRepos = true;
-                BitbucketRepoOptions.Add(NewOption(fullName, fullName, isWatched: true));
-                _populatingRepos = false;
-                BitbucketRepoView.Refresh();
-            }
-
-            return;
-        }
-
-        if (option.IsWatched != isWatched)
-        {
-            _populatingRepos = true;
-            option.IsWatched = isWatched;
-            _populatingRepos = false;
-        }
+        PreviewSound(SelectedNotificationSound, NotificationVolume);
     }
 
     partial void OnNotifyReviewRequestsChanged(bool value) => Persist();
@@ -664,15 +331,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (!_loading)
         {
             PreviewSound(value, NotificationVolume);
-        }
-    }
-
-    partial void OnNotificationVolumeChanged(int value)
-    {
-        Persist();
-        if (!_loading)
-        {
-            PreviewSound(SelectedNotificationSound, value);
         }
     }
 
@@ -758,7 +416,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         NotifyCi = s.Notifications.CiStatus;
         NotifyWatchedRepoActivity = s.Notifications.WatchedRepoActivity;
         NotifyParticipating = s.Notifications.Participating;
- 
+
         SelectedNotificationStyle = s.Notifications.Style;
 
         var loadedSound = s.Notifications.Sound;
@@ -786,39 +444,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         SurfaceRecentlyModified = s.SurfaceRecentlyModified;
         StartWithWindows = AutostartManager.IsEnabled();
 
-        WatchedRepositories.Clear();
-        foreach (var repo in s.WatchedRepositories)
-        {
-            WatchedRepositories.Add(repo);
-        }
-
-        // Seed the picker with the already-watched repos (pre-checked) so they're visible as
-        // one unified list before "Load my repositories" is clicked. Loading later clears and
-        // re-adds discovered repos plus any watched ones it didn't return, so this never double-ups.
-        _populatingRepos = true;
-        BitbucketRepoOptions.Clear();
-        foreach (var repo in WatchedRepositories)
-        {
-            BitbucketRepoOptions.Add(NewOption(repo, repo, isWatched: true));
-        }
-
-        _populatingRepos = false;
-
-        GitHubConnected = _gitHub.IsConnected;
-        GitHubAccountLabel = _gitHub.IsConnected
-            ? (_gitHub.AccountLogin is { } login ? $"Connected as {login}" : "Connected")
-            : "Not connected";
-
-        BitbucketConnected = _bitbucket.IsConnected;
-        BitbucketAccountLabel = _bitbucket.IsConnected
-            ? (_bitbucket.AccountLogin is { } bbLogin ? $"Connected as {bbLogin}" : "Connected")
-            : "Not connected";
-
-        GitLabConnected = _gitlab.IsConnected;
-        GitLabAccountLabel = _gitlab.IsConnected
-            ? (_gitlab.AccountLogin is { } glLogin ? $"Connected as {glLogin}" : "Connected")
-            : "Not connected";
-
         _loading = false;
     }
 
@@ -829,7 +454,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             return;
         }
 
-        // Reload first so provider-managed fields (connection state) aren't clobbered.
+        // Reload first so account-managed fields (connection state, watched repos) aren't clobbered.
         var s = _settings.Load();
         s.PollIntervalSeconds = PollIntervalSeconds;
         s.Theme = SelectedTheme;
@@ -846,8 +471,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.Notifications.Style = SelectedNotificationStyle;
         s.Notifications.Sound = SelectedNotificationSound;
         s.Notifications.Volume = NotificationVolume;
-        s.WatchedRepositories.Clear();
-        s.WatchedRepositories.AddRange(WatchedRepositories);
         _settings.Save(s);
     }
 }

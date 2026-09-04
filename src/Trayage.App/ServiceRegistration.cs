@@ -7,6 +7,7 @@ using Trayage.App.Views;
 using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
 using Trayage.Core.Notifications;
+using Trayage.Core.Providers;
 using Trayage.Core.Providers.Bitbucket;
 using Trayage.Core.Providers.GitHub;
 using Trayage.Core.Providers.GitLab;
@@ -37,20 +38,18 @@ internal static class ServiceRegistration
         builder.Services.AddSingleton<IToastNotifier, WindowsToastNotifier>();
         builder.Services.AddHostedService<InboxPollingService>();
 
-        // Providers (Phase 3 & 7)
+        // Providers (Phase 3 & 7). Providers are per-account and come and go at runtime, so
+        // instead of fixed singletons the factory builds them and the registry owns the live set.
+        // The Options sections stay app-wide: they carry the shipped OAuth *client* identity,
+        // which every account of that provider legitimately shares.
         builder.Services.AddHttpClient();
 
         builder.Services.Configure<GitHubOptions>(builder.Configuration.GetSection(GitHubOptions.SectionName));
-        builder.Services.AddSingleton<GitHubProvider>();
-        builder.Services.AddSingleton<IInboxProvider>(sp => sp.GetRequiredService<GitHubProvider>());
-
         builder.Services.Configure<BitbucketOptions>(builder.Configuration.GetSection(BitbucketOptions.SectionName));
-        builder.Services.AddSingleton<BitbucketProvider>();
-        builder.Services.AddSingleton<IInboxProvider>(sp => sp.GetRequiredService<BitbucketProvider>());
-
         builder.Services.Configure<GitLabOptions>(builder.Configuration.GetSection(GitLabOptions.SectionName));
-        builder.Services.AddSingleton<GitLabProvider>();
-        builder.Services.AddSingleton<IInboxProvider>(sp => sp.GetRequiredService<GitLabProvider>());
+
+        builder.Services.AddSingleton<IProviderFactory, ProviderFactory>();
+        builder.Services.AddSingleton<ProviderRegistry>();
 
         // UI / shell (Phase 1, 4 & 6)
         builder.Services.AddSingleton<TrayIconService>();

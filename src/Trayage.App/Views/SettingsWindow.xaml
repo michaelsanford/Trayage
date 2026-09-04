@@ -8,13 +8,280 @@
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance vm:SettingsViewModel, IsDesignTimeCreatable=False}"
                  Title="Trayage Settings"
-                 Width="640"
-                 Height="600"
-                 MinWidth="560"
+                 Width="760"
+                 Height="620"
+                 MinWidth="620"
                  MinHeight="480"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica">
+
+    <ui:FluentWindow.Resources>
+        <!-- One account's card on the Accounts page. Collapsed it shows the brand mark, the
+             account's name, and where it lives; expanded it holds everything specific to that
+             account — including the device-code block, which used to render outside the card. -->
+        <DataTemplate x:Key="AccountCardTemplate" DataType="{x:Type vm:ProviderAccountViewModel}">
+            <ui:CardExpander Style="{StaticResource SettingsCardExpanderStyle}"
+                             Expanded="OnAccountExpanded">
+                <ui:CardExpander.Header>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Brand mark, tinted per provider by the triggers below. -->
+                        <Path x:Name="BrandMark"
+                              Grid.Column="0"
+                              Data="{StaticResource GitHubMarkGeometry}"
+                              Fill="{DynamicResource TextFillColorPrimaryBrush}"
+                              Stretch="Uniform" Width="22" Height="22"
+                              VerticalAlignment="Center" Margin="0,0,14,0" />
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding DisplayLabel}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding SubtitleLabel}" Style="{StaticResource CaptionTextStyle}" />
+                        </StackPanel>
+
+                        <!-- Status dot + word, so connection state reads at a glance. -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,8,0">
+                            <Ellipse x:Name="StatusDot" Width="8" Height="8" Margin="0,0,6,0"
+                                     Fill="{DynamicResource TextFillColorDisabledBrush}" />
+                            <TextBlock Text="{Binding StatusLabel}" Style="{StaticResource CaptionTextStyle}" />
+                        </StackPanel>
+                    </Grid>
+                </ui:CardExpander.Header>
+
+                <StackPanel Margin="0,4,0,0">
+                    <ProgressBar Style="{StaticResource BusyProgressStyle}"
+                                 Visibility="{Binding Busy, Converter={StaticResource BoolToVisibility}}" />
+
+                    <!-- Connect / disconnect. -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <ui:Button Content="Connect"
+                                   Appearance="Primary"
+                                   Command="{Binding ConnectCommand}"
+                                   IsEnabled="{Binding Busy, Converter={StaticResource InverseBool}}"
+                                   Visibility="{Binding Connected, Converter={StaticResource InverseBoolToVisibility}}" />
+                        <ui:Button Content="Disconnect"
+                                   Command="{Binding DisconnectCommand}"
+                                   Visibility="{Binding Connected, Converter={StaticResource BoolToVisibility}}" />
+                        <ui:Button Content="Remove"
+                                   Icon="{ui:SymbolIcon Delete24}"
+                                   Margin="8,0,0,0"
+                                   ToolTip="Forget this account and delete its stored token"
+                                   Command="{Binding DataContext.RemoveAccountCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                   CommandParameter="{Binding}" />
+                    </StackPanel>
+
+                    <!-- Device-code / status block, now inside the card it belongs to. -->
+                    <StackPanel Margin="0,8,0,0"
+                                Visibility="{Binding StatusMessage, Converter={StaticResource EmptyStringToCollapsed}}">
+                        <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionTextStyle}" />
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="0,8,0,0"
+                                    Visibility="{Binding UserCode, Converter={StaticResource EmptyStringToCollapsed}}">
+                            <ui:TextBox Text="{Binding UserCode, Mode=OneWay}"
+                                        IsReadOnly="True"
+                                        FontFamily="Cascadia Mono, Consolas, monospace"
+                                        FontSize="18"
+                                        MinWidth="150"
+                                        VerticalContentAlignment="Center" />
+                            <ui:Button Content="Copy"
+                                       Icon="{ui:SymbolIcon Copy24}"
+                                       Margin="8,0,0,0"
+                                       Command="{Binding CopyCodeCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Everything below only makes sense once the account is connected. -->
+                    <StackPanel Visibility="{Binding Connected, Converter={StaticResource BoolToVisibility}}">
+
+                        <TextBlock Text="Name" Style="{StaticResource SectionHeaderTextStyle}" />
+                        <TextBlock Text="What to call this account in Settings and beside its inbox items. Leave blank to use the login."
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   Margin="0,0,0,6" />
+                        <ui:TextBox PlaceholderText="Work, Personal, …"
+                                    Text="{Binding Nickname, UpdateSourceTrigger=LostFocus}"
+                                    MaxWidth="280"
+                                    HorizontalAlignment="Left" />
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}" Margin="0,12,0,8">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Include in the inbox" FontWeight="SemiBold" />
+                                    <TextBlock Text="Turn off to pause this account without disconnecting it — the token is kept."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding IsEnabled}" />
+                        </ui:CardControl>
+
+                        <!-- Bitbucket only: the watched-repo picker, scoped to this account. -->
+                        <StackPanel Visibility="{Binding SupportsRepoPicker, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Watched repositories" Style="{StaticResource SectionHeaderTextStyle}" />
+                            <TextBlock Text="Bitbucket has no notification inbox, so Trayage watches the repositories you pick here — surfacing their pull requests, review requests, and activity. These are watched with this account's access only."
+                                       Style="{StaticResource CaptionTextStyle}"
+                                       Margin="0,0,0,8" />
+
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <ui:Button Grid.Column="0"
+                                           Content="Refresh"
+                                           Icon="{ui:SymbolIcon ArrowSync24}"
+                                           ToolTip="Reload the repositories this account can reach"
+                                           Command="{Binding LoadReposCommand}"
+                                           IsEnabled="{Binding IsLoadingRepos, Converter={StaticResource InverseBool}}"
+                                           Margin="0,0,8,0" />
+                                <ui:TextBox Grid.Column="1"
+                                            PlaceholderText="Filter…"
+                                            Text="{Binding RepoFilter, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+
+                            <ProgressBar Style="{StaticResource BusyProgressStyle}"
+                                         Visibility="{Binding IsLoadingRepos, Converter={StaticResource BoolToVisibility}}" />
+
+                            <TextBlock Text="{Binding RepoLoadStatus}"
+                                       Style="{StaticResource CaptionTextStyle}"
+                                       Margin="0,0,0,8"
+                                       Visibility="{Binding RepoLoadStatus, Converter={StaticResource EmptyStringToCollapsed}}" />
+
+                            <!-- Bounded and virtualizing: a large Bitbucket account would
+                                 otherwise realize every row into the page's scroll viewer. -->
+                            <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto" Margin="0,0,0,12">
+                                <ItemsControl ItemsSource="{Binding RepoView}"
+                                              VirtualizingPanel.IsVirtualizing="True"
+                                              VirtualizingPanel.VirtualizationMode="Recycling">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <VirtualizingStackPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.GroupStyle>
+                                        <GroupStyle>
+                                            <GroupStyle.ContainerStyle>
+                                                <Style TargetType="{x:Type GroupItem}">
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="{x:Type GroupItem}">
+                                                                <!-- Collapsed by default so large accounts aren't a wall of repos;
+                                                                     a typed filter auto-expands groups so matches are visible. -->
+                                                                <Expander Margin="0,0,0,4"
+                                                                          IsExpanded="{Binding DataContext.RepoFilterActive, RelativeSource={RelativeSource AncestorType=ItemsControl}, Mode=OneWay}">
+                                                                    <Expander.Header>
+                                                                        <StackPanel Orientation="Horizontal" d:DataContext="{d:DesignInstance CollectionViewGroup}">
+                                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                                            <TextBlock Text="{Binding ItemCount, StringFormat=' ({0})'}"
+                                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                                        </StackPanel>
+                                                                    </Expander.Header>
+                                                                    <ItemsPresenter Margin="12,4,0,4" />
+                                                                </Expander>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Style>
+                                            </GroupStyle.ContainerStyle>
+                                        </GroupStyle>
+                                    </ItemsControl.GroupStyle>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:WatchedRepoOption}">
+                                            <!-- Compact one-line row (workspace is already the group header),
+                                                 so large accounts list densely instead of a wall of cards. -->
+                                            <Grid Margin="0,3,8,3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Text="{Binding DisplayName}"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding FullName}" />
+                                                <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding IsWatched}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <TextBlock Text="Add a repository manually" Style="{StaticResource SectionHeaderTextStyle}" />
+                            <TextBlock Text="For a repository the loader can't reach. It joins the watched list above (toggle it off there to stop watching)."
+                                       Style="{StaticResource CaptionTextStyle}"
+                                       Margin="0,0,0,8" />
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:TextBox Grid.Column="0"
+                                            PlaceholderText="owner/repo or a Bitbucket URL"
+                                            Text="{Binding NewWatchedRepo, UpdateSourceTrigger=PropertyChanged}"
+                                            Margin="0,0,8,0" />
+                                <ui:Button Grid.Column="1"
+                                           Content="Add"
+                                           Appearance="Secondary"
+                                           Command="{Binding AddWatchedRepoCommand}" />
+                            </Grid>
+                            <TextBlock Text="{Binding WatchedRepoError}"
+                                       Style="{StaticResource ErrorTextStyle}"
+                                       Margin="0,0,0,8"
+                                       Visibility="{Binding WatchedRepoError, Converter={StaticResource EmptyStringToCollapsed}}" />
+                        </StackPanel>
+
+                        <!-- GitHub and GitLab: what used to be whole informational tabs. Their
+                             inboxes are server-side, so the controls live on the provider. -->
+                        <StackPanel Visibility="{Binding SupportsRepoPicker, Converter={StaticResource InverseBoolToVisibility}}">
+                            <TextBlock x:Name="ServerSideHeader" Text="Where this inbox comes from" Style="{StaticResource SectionHeaderTextStyle}" />
+                            <TextBlock x:Name="ServerSideBlurb"
+                                       Text="Your GitHub items mirror your GitHub notifications inbox. To choose which repositories notify you, manage watching and notification preferences on GitHub itself — Trayage shows whatever GitHub delivers."
+                                       Style="{StaticResource CaptionTextStyle}"
+                                       Margin="0,0,0,8" />
+                            <ui:HyperlinkButton x:Name="ServerSideLink1" Content="Open your GitHub notifications inbox"
+                                                NavigateUri="https://github.com/notifications" />
+                            <ui:HyperlinkButton x:Name="ServerSideLink2" Content="Manage which repositories you watch"
+                                                NavigateUri="https://github.com/watching" />
+                            <ui:HyperlinkButton x:Name="ServerSideLink3" Content="GitHub notification settings"
+                                                NavigateUri="https://github.com/settings/notifications" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+
+            </ui:CardExpander>
+
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Provider}" Value="Bitbucket">
+                    <Setter TargetName="BrandMark" Property="Data" Value="{StaticResource BitbucketMarkGeometry}" />
+                    <Setter TargetName="BrandMark" Property="Fill" Value="{StaticResource BitbucketBlueBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Provider}" Value="GitLab">
+                    <Setter TargetName="BrandMark" Property="Data" Value="{StaticResource GitLabMarkGeometry}" />
+                    <Setter TargetName="BrandMark" Property="Fill" Value="{StaticResource GitLabOrangeBrush}" />
+                    <Setter TargetName="ServerSideBlurb" Property="Text"
+                            Value="Your GitLab items mirror your GitLab To-Do list. To choose what creates a to-do, manage your notification settings on GitLab itself — Trayage shows whatever GitLab delivers." />
+                    <Setter TargetName="ServerSideLink1" Property="Content" Value="Open your GitLab To-Do list" />
+                    <Setter TargetName="ServerSideLink1" Property="NavigateUri" Value="https://gitlab.com/dashboard/todos" />
+                    <Setter TargetName="ServerSideLink2" Property="Content" Value="GitLab notification settings" />
+                    <Setter TargetName="ServerSideLink2" Property="NavigateUri" Value="https://gitlab.com/-/profile/notifications" />
+                    <Setter TargetName="ServerSideLink3" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Connected}" Value="True">
+                    <Setter TargetName="StatusDot" Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Connected}" Value="True" />
+                        <Condition Binding="{Binding IsEnabled}" Value="False" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="StatusDot" Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                </MultiDataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </ui:FluentWindow.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -24,225 +291,151 @@
 
         <ui:TitleBar Grid.Row="0" Title="Trayage Settings" />
 
-        <TabControl Grid.Row="1"
-                    TabStripPlacement="Left"
-                    Margin="12,4,12,12"
-                    Background="Transparent"
-                    BorderThickness="0"
-                    SelectionChanged="OnTabSelectionChanged">
+        <Grid Grid.Row="1" Margin="12,4,12,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
-            <!-- Accounts -->
-            <TabItem Header="Accounts">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
+            <!-- Navigation rail. A ListBox rather than ui:NavigationView: the panes share one
+                 DataContext and one view-model, so there is nothing to navigate between —
+                 this just selects which pane is visible. -->
+            <ListBox x:Name="Nav"
+                     Grid.Column="0"
+                     Width="168"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     SelectedIndex="0"
+                     SelectionChanged="OnNavigationSelectionChanged">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="10,9" />
+                        <Setter Property="Margin" Value="0,1" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Chrome"
+                                            Background="Transparent"
+                                            CornerRadius="8"
+                                            Padding="{TemplateBinding Padding}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="4" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <!-- Fluent's selection pill on the leading edge. -->
+                                            <Rectangle x:Name="Pill"
+                                                       Grid.Column="0"
+                                                       Width="3" RadiusX="1.5" RadiusY="1.5"
+                                                       HorizontalAlignment="Left"
+                                                       Fill="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                       Visibility="Hidden" />
+                                            <ContentPresenter Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Chrome" Property="Background"
+                                                    Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Chrome" Property="Background"
+                                                    Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                            <Setter TargetName="Pill" Property="Visibility" Value="Visible" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+
+                <ListBoxItem>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Person24" Margin="0,0,10,0" />
+                        <TextBlock Text="Accounts" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Alert24" Margin="0,0,10,0" />
+                        <TextBlock Text="Notifications" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Mail24" Margin="0,0,10,0" />
+                        <TextBlock Text="Inbox" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Settings24" Margin="0,0,10,0" />
+                        <TextBlock Text="General" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Info24" Margin="0,0,10,0" />
+                        <TextBlock Text="About" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ListBoxItem>
+            </ListBox>
+
+            <!-- The rail selects which of these panes is visible; they are siblings rather than
+                 navigated Pages so the whole window keeps one DataContext and one view-model. -->
+            <Grid Grid.Column="1" Margin="16,0,0,0">
+
+                <!-- ============================ Accounts ============================ -->
+                <ScrollViewer x:Name="AccountsPane" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="Accounts" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <TextBlock Text="Accounts" Style="{StaticResource PageTitleTextStyle}" />
+                        <TextBlock Text="Connect as many accounts as you like — a work and a personal GitHub, two Bitbucket workspaces. Each keeps its own sign-in and its own watched repositories."
+                                   Style="{StaticResource PageDescriptionTextStyle}" />
 
-                        <ui:CardControl Margin="0,0,0,12">
-                            <ui:CardControl.Header>
-                                <StackPanel Orientation="Horizontal">
-                                    <Path Data="{StaticResource GitHubMarkGeometry}"
-                                          Fill="{DynamicResource TextFillColorPrimaryBrush}"
-                                          Stretch="Uniform" Width="22" Height="22"
-                                          VerticalAlignment="Center" Margin="0,0,12,0" />
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="GitHub" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding GitHubAccountLabel}"
-                                                   FontSize="12"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <ui:Button Content="Connect"
-                                           Appearance="Primary"
-                                           Command="{Binding ConnectGitHubCommand}"
-                                           IsEnabled="{Binding GitHubBusy, Converter={StaticResource InverseBool}}"
-                                           Visibility="{Binding GitHubConnected, Converter={StaticResource InverseBoolToVisibility}}" />
-                                <ui:Button Content="Disconnect"
-                                           Command="{Binding DisconnectGitHubCommand}"
-                                           Visibility="{Binding GitHubConnected, Converter={StaticResource BoolToVisibility}}" />
-                            </StackPanel>
-                        </ui:CardControl>
+                        <ItemsControl ItemsSource="{Binding Accounts}"
+                                      ItemTemplate="{StaticResource AccountCardTemplate}" />
 
-                        <StackPanel Margin="4,0,0,16"
-                                    Visibility="{Binding GitHubDeviceInstruction, Converter={StaticResource EmptyStringToCollapsed}}">
-                            <TextBlock Text="{Binding GitHubDeviceInstruction}"
-                                       TextWrapping="Wrap"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                            <StackPanel Orientation="Horizontal"
-                                        Margin="0,8,0,0"
-                                        Visibility="{Binding GitHubUserCode, Converter={StaticResource EmptyStringToCollapsed}}">
-                                <ui:TextBox Text="{Binding GitHubUserCode, Mode=OneWay}"
-                                            IsReadOnly="True"
-                                            FontFamily="Cascadia Mono, Consolas, monospace"
-                                            FontSize="18"
-                                            MinWidth="150"
-                                            VerticalContentAlignment="Center" />
-                                <ui:Button Content="Copy"
-                                           Icon="{ui:SymbolIcon Copy24}"
-                                           Margin="8,0,0,0"
-                                           Command="{Binding CopyGitHubCodeCommand}" />
-                            </StackPanel>
+                        <!-- Empty state, so a fresh install isn't a blank pane. -->
+                        <StackPanel Margin="0,24,0,24"
+                                    HorizontalAlignment="Center"
+                                    Visibility="{Binding HasNoAccounts, Converter={StaticResource BoolToVisibility}}">
+                            <ui:SymbolIcon Symbol="PersonAdd24" FontSize="36" HorizontalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Text="No accounts yet. Add one to start filling your inbox."
+                                       Style="{StaticResource CaptionTextStyle}"
+                                       Margin="0,8,0,0"
+                                       HorizontalAlignment="Center" />
                         </StackPanel>
 
-                        <ui:CardControl Margin="0,0,0,12">
-                            <ui:CardControl.Header>
-                                <StackPanel Orientation="Horizontal">
-                                    <Path Data="{StaticResource BitbucketMarkGeometry}"
-                                          Fill="{StaticResource BitbucketBlueBrush}"
-                                          Stretch="Uniform" Width="22" Height="22"
-                                          VerticalAlignment="Center" Margin="0,0,12,0" />
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Bitbucket Cloud" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding BitbucketAccountLabel}"
-                                                   FontSize="12"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <ui:Button Content="Connect"
+                        <ui:DropDownButton Content="Add account"
+                                           Icon="{ui:SymbolIcon Add24}"
                                            Appearance="Primary"
-                                           Command="{Binding ConnectBitbucketCommand}"
-                                           IsEnabled="{Binding BitbucketBusy, Converter={StaticResource InverseBool}}"
-                                           Visibility="{Binding BitbucketConnected, Converter={StaticResource InverseBoolToVisibility}}" />
-                                <ui:Button Content="Disconnect"
-                                           Command="{Binding DisconnectBitbucketCommand}"
-                                           Visibility="{Binding BitbucketConnected, Converter={StaticResource BoolToVisibility}}" />
-                            </StackPanel>
-                        </ui:CardControl>
-                        <TextBlock Text="{Binding BitbucketStatus}"
-                                   TextWrapping="Wrap"
-                                   Margin="4,0,0,16"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Visibility="{Binding BitbucketStatus, Converter={StaticResource EmptyStringToCollapsed}}" />
-
-                        <ui:CardControl Margin="0,0,0,4">
-                            <ui:CardControl.Header>
-                                <StackPanel Orientation="Horizontal">
-                                    <Path Data="{StaticResource GitLabMarkGeometry}"
-                                          Fill="{StaticResource GitLabOrangeBrush}"
-                                          Stretch="Uniform" Width="22" Height="22"
-                                          VerticalAlignment="Center" Margin="0,0,12,0" />
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="GitLab" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding GitLabAccountLabel}"
-                                                   FontSize="12"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <ui:Button Content="Connect"
-                                           Appearance="Primary"
-                                           Command="{Binding ConnectGitLabCommand}"
-                                           IsEnabled="{Binding GitLabBusy, Converter={StaticResource InverseBool}}"
-                                           Visibility="{Binding GitLabConnected, Converter={StaticResource InverseBoolToVisibility}}" />
-                                <ui:Button Content="Disconnect"
-                                           Command="{Binding DisconnectGitLabCommand}"
-                                           Visibility="{Binding GitLabConnected, Converter={StaticResource BoolToVisibility}}" />
-                            </StackPanel>
-                        </ui:CardControl>
-
-                        <StackPanel Margin="4,0,0,0"
-                                    Visibility="{Binding GitLabDeviceInstruction, Converter={StaticResource EmptyStringToCollapsed}}">
-                            <TextBlock Text="{Binding GitLabDeviceInstruction}"
-                                       TextWrapping="Wrap"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                            <StackPanel Orientation="Horizontal"
-                                        Margin="0,8,0,0"
-                                        Visibility="{Binding GitLabUserCode, Converter={StaticResource EmptyStringToCollapsed}}">
-                                <ui:TextBox Text="{Binding GitLabUserCode, Mode=OneWay}"
-                                            IsReadOnly="True"
-                                            FontFamily="Cascadia Mono, Consolas, monospace"
-                                            FontSize="18"
-                                            MinWidth="150"
-                                            VerticalContentAlignment="Center" />
-                                <ui:Button Content="Copy"
-                                           Icon="{ui:SymbolIcon Copy24}"
-                                           Margin="8,0,0,0"
-                                           Command="{Binding CopyGitLabCodeCommand}" />
-                            </StackPanel>
-                        </StackPanel>
+                                           HorizontalAlignment="Left"
+                                           Margin="0,8,0,0">
+                            <ui:DropDownButton.Flyout>
+                                <ContextMenu ItemsSource="{Binding AddAccountOptions}">
+                                    <ContextMenu.ItemContainerStyle>
+                                        <Style TargetType="MenuItem">
+                                            <Setter Property="Header" Value="{Binding Label}" />
+                                            <Setter Property="Command"
+                                                    Value="{Binding DataContext.AddAccountCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                            <Setter Property="CommandParameter" Value="{Binding}" />
+                                        </Style>
+                                    </ContextMenu.ItemContainerStyle>
+                                </ContextMenu>
+                            </ui:DropDownButton.Flyout>
+                        </ui:DropDownButton>
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
 
-            <!-- Notifications -->
-            <TabItem Header="Notifications">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
+                <!-- ========================== Notifications ========================== -->
+                <ScrollViewer x:Name="NotificationsPane" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                     <StackPanel>
-                        <TextBlock Text="Notifications" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
-                        <TextBlock Text="Choose which kinds of activity notify you and how."
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Margin="0,0,0,16" />
-
-                        <ui:CardControl Margin="0,0,0,12">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Notification style" FontWeight="SemiBold" />
-                                    <TextBlock Text="Choose whether to show toasts, play a sound, or both."
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <ComboBox ItemsSource="{Binding NotificationStyleOptions}"
-                                      DisplayMemberPath="Label"
-                                      SelectedValuePath="Style"
-                                      SelectedValue="{Binding SelectedNotificationStyle}"
-                                      MinWidth="160" />
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="0,0,0,12">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Notification sound" FontWeight="SemiBold" />
-                                    <TextBlock Text="Choose which audio ping plays for new activity."
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <ComboBox ItemsSource="{Binding NotificationSounds}"
-                                      DisplayMemberPath="Label"
-                                      SelectedValuePath="Value"
-                                      SelectedValue="{Binding SelectedNotificationSound}"
-                                      IsEnabled="{Binding SoundSelectionEnabled}"
-                                      MinWidth="160" />
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="0,0,0,16" IsEnabled="{Binding SoundSelectionEnabled}">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Notification volume" FontWeight="SemiBold" />
-                                    <TextBlock Text="Adjust the volume level of audio alerts."
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <Grid MinWidth="180">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="45" />
-                                </Grid.ColumnDefinitions>
-                                <Slider Grid.Column="0"
-                                        Minimum="0"
-                                        Maximum="100"
-                                        SmallChange="5"
-                                        LargeChange="10"
-                                        TickFrequency="5"
-                                        Value="{Binding NotificationVolume, UpdateSourceTrigger=PropertyChanged}"
-                                        VerticalAlignment="Center"
-                                        Margin="0,0,12,0" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding NotificationVolume, StringFormat='{}{0}%'}"
-                                           VerticalAlignment="Center"
-                                           HorizontalAlignment="Right"
-                                           FontFamily="Cascadia Mono, Consolas, monospace" />
-                            </Grid>
-                        </ui:CardControl>
+                        <TextBlock Text="Notifications" Style="{StaticResource PageTitleTextStyle}" />
+                        <TextBlock Text="Choose which kinds of activity notify you, and how."
+                                   Style="{StaticResource PageDescriptionTextStyle}" />
 
                         <!-- Shown only when the OS can't deliver toasts (Windows App Runtime missing).
                              Trayage still tracks the inbox in the tray; this offers the one-click fix. -->
@@ -259,202 +452,190 @@
                                        Command="{Binding OpenNotificationRuntimeHelpCommand}" />
                         </StackPanel>
 
-                        <ui:ToggleSwitch Content="Review requests"
-                                         IsChecked="{Binding NotifyReviewRequests}"
-                                         Margin="0,0,0,10" />
-                        <ui:ToggleSwitch Content="Mentions and assignments"
-                                         IsChecked="{Binding NotifyMentions}"
-                                         Margin="0,0,0,10" />
-                        <ui:ToggleSwitch Content="CI / check status changes"
-                                         IsChecked="{Binding NotifyCi}"
-                                         Margin="0,0,0,10" />
-                        <ui:ToggleSwitch Content="All activity on watched repositories"
-                                         IsChecked="{Binding NotifyWatchedRepoActivity}"
-                                         Margin="0,0,0,10" />
-                        <ui:ToggleSwitch Content="Issues &amp; PRs I'm involved in"
-                                         IsChecked="{Binding NotifyParticipating}"
-                                         Margin="0,0,0,10" />
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+                        <TextBlock Text="Delivery" Style="{StaticResource SectionHeaderTextStyle}" />
 
-            <!-- Bitbucket: watched-repo picker. Bitbucket has no notification inbox, so the
-                 repos chosen here are the ones Trayage actively queries for activity. -->
-            <TabItem Header="Bitbucket" x:Name="BitbucketTab" IsEnabled="{Binding BitbucketConnected}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
-                    <StackPanel>
-                        <TextBlock Text="Bitbucket repositories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
-                        <TextBlock Text="Bitbucket has no notification inbox, so Trayage watches the repositories you pick here — surfacing their pull requests, review requests, and activity. Load your repositories and toggle the ones you care about. (Whether watched-repo activity also raises a toast is set on the Notifications tab.)"
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Margin="0,0,0,16" />
-
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <ui:Button Grid.Column="0"
-                                       Content="Refresh"
-                                       Icon="{ui:SymbolIcon ArrowSync24}"
-                                       ToolTip="Reload your accessible Bitbucket repositories"
-                                       Appearance="Primary"
-                                       IsEnabled="{Binding BitbucketConnected}"
-                                       Command="{Binding LoadBitbucketReposCommand}"
-                                       Margin="0,0,8,0" />
-                            <ui:TextBox Grid.Column="1"
-                                        PlaceholderText="Filter…"
-                                        Text="{Binding RepoFilter, UpdateSourceTrigger=PropertyChanged}" />
-                        </Grid>
-
-                        <TextBlock Text="{Binding RepoLoadStatus}"
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Margin="0,0,0,8"
-                                   Visibility="{Binding RepoLoadStatus, Converter={StaticResource EmptyStringToCollapsed}}" />
-
-                        <!-- Grouped into collapsible workspace sections (CollectionView grouping). -->
-                        <ItemsControl ItemsSource="{Binding BitbucketRepoView}" Margin="0,0,0,16">
-                            <ItemsControl.GroupStyle>
-                                <GroupStyle>
-                                    <GroupStyle.ContainerStyle>
-                                        <Style TargetType="{x:Type GroupItem}">
-                                            <Setter Property="Template">
-                                                <Setter.Value>
-                                                    <ControlTemplate TargetType="{x:Type GroupItem}">
-                                                        <!-- Collapsed by default so large accounts aren't a wall of repos;
-                                                             a typed filter auto-expands groups so matches are visible. -->
-                                                        <Expander Margin="0,0,0,4"
-                                                                  IsExpanded="{Binding DataContext.RepoFilterActive, RelativeSource={RelativeSource AncestorType=ItemsControl}, Mode=OneWay}">
-                                                            <Expander.Header>
-                                                                <StackPanel Orientation="Horizontal" d:DataContext="{d:DesignInstance CollectionViewGroup}">
-                                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                                                    <TextBlock Text="{Binding ItemCount, StringFormat=' ({0})'}"
-                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                                </StackPanel>
-                                                            </Expander.Header>
-                                                            <ItemsPresenter Margin="12,4,0,4" />
-                                                        </Expander>
-                                                    </ControlTemplate>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </Style>
-                                    </GroupStyle.ContainerStyle>
-                                </GroupStyle>
-                            </ItemsControl.GroupStyle>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:WatchedRepoOption}">
-                                    <!-- Compact one-line row (workspace is already the group header),
-                                         so large accounts list densely instead of a wall of cards. -->
-                                    <Grid Margin="0,3,0,3">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0"
-                                                   Text="{Binding DisplayName}"
-                                                   VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   ToolTip="{Binding FullName}" />
-                                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding IsWatched}" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <TextBlock Text="Add a repository manually" FontWeight="SemiBold" Margin="0,0,0,4" />
-                        <TextBlock Text="For a repository the loader can't reach. It's added to the watched list above (toggle it off there to stop watching)."
-                                   TextWrapping="Wrap"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Margin="0,0,0,8" />
-                        <Grid Margin="0,0,0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <ui:TextBox Grid.Column="0"
-                                        PlaceholderText="owner/repo or a Bitbucket URL"
-                                        Text="{Binding NewWatchedRepo, UpdateSourceTrigger=PropertyChanged}"
-                                        Margin="0,0,8,0" />
-                            <ui:Button Grid.Column="1"
-                                       Content="Add"
-                                       Appearance="Secondary"
-                                       Command="{Binding AddWatchedRepoCommand}" />
-                        </Grid>
-                        <TextBlock Text="{Binding WatchedRepoError}"
-                                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,12"
-                                   Visibility="{Binding WatchedRepoError, Converter={StaticResource EmptyStringToCollapsed}}" />
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- GitHub: informational. GitHub watching/notifications are managed on GitHub;
-                 Trayage only mirrors the resulting notifications inbox. -->
-            <TabItem Header="GitHub" IsEnabled="{Binding GitHubConnected}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
-                    <StackPanel>
-                        <TextBlock Text="GitHub repositories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
-                        <TextBlock Text="Your GitHub items mirror your GitHub notifications inbox. To choose which repositories notify you, manage watching and notification preferences on GitHub itself — Trayage shows whatever GitHub delivers."
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Margin="0,0,0,16" />
-
-                        <ui:HyperlinkButton Content="Open your GitHub notifications inbox"
-                                            NavigateUri="https://github.com/notifications"
-                                            Margin="0,0,0,4" />
-                        <ui:HyperlinkButton Content="Manage which repositories you watch"
-                                            NavigateUri="https://github.com/watching"
-                                            Margin="0,0,0,4" />
-                        <ui:HyperlinkButton Content="GitHub notification settings"
-                                            NavigateUri="https://github.com/settings/notifications"
-                                            Margin="0,0,0,16" />
-
-                        <TextBlock Text="Trayage can only escalate notifications GitHub already sends into Windows toasts (see the Notifications tab); it can't surface activity GitHub isn't notifying you about."
-                                   TextWrapping="Wrap"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- GitLab: informational. GitLab to-dos and notification settings are managed on
-                 GitLab; Trayage only mirrors the resulting to-do inbox. -->
-            <TabItem Header="GitLab" IsEnabled="{Binding GitLabConnected}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
-                    <StackPanel>
-                        <TextBlock Text="GitLab to-dos" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
-                        <TextBlock Text="Your GitLab items mirror your GitLab To-Do list. To choose what creates a to-do, manage your notification settings on GitLab itself — Trayage shows whatever GitLab delivers."
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Margin="0,0,0,16" />
-
-                        <ui:HyperlinkButton Content="Open your GitLab To-Do list"
-                                            NavigateUri="https://gitlab.com/dashboard/todos"
-                                            Margin="0,0,0,4" />
-                        <ui:HyperlinkButton Content="GitLab notification settings"
-                                            NavigateUri="https://gitlab.com/-/profile/notifications"
-                                            Margin="0,0,0,16" />
-
-                        <TextBlock Text="Trayage can only surface to-dos GitLab already creates (assignments, mentions, review/approval requests, failed pipelines, and so on); it can't surface activity GitLab isn't tracking as a to-do."
-                                   TextWrapping="Wrap"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- General -->
-            <TabItem Header="General">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8">
-                    <StackPanel>
-                        <TextBlock Text="General" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
-
-                        <ui:CardControl Margin="0,0,0,12">
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
-                                <TextBlock Text="Check for new activity every" VerticalAlignment="Center" />
+                                <StackPanel>
+                                    <TextBlock Text="Notification style" FontWeight="SemiBold" />
+                                    <TextBlock Text="Show a toast, play a sound, or both."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ComboBox ItemsSource="{Binding NotificationStyleOptions}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Style"
+                                      SelectedValue="{Binding SelectedNotificationStyle}"
+                                      MinWidth="160" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Notification sound" FontWeight="SemiBold" />
+                                    <TextBlock Text="Which audio ping plays for new activity."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ComboBox ItemsSource="{Binding NotificationSounds}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding SelectedNotificationSound}"
+                                      IsEnabled="{Binding SoundSelectionEnabled}"
+                                      MinWidth="160" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}" IsEnabled="{Binding SoundSelectionEnabled}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Notification volume" FontWeight="SemiBold" />
+                                    <TextBlock Text="How loud the audio alert plays."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <Grid MinWidth="180">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="45" />
+                                </Grid.ColumnDefinitions>
+                                <!-- The readout tracks the thumb live, but the value is only saved
+                                     (and previewed) once the drag ends — otherwise every pixel of
+                                     travel rewrote settings.json and replayed the sound. -->
+                                <Slider x:Name="VolumeSlider"
+                                        Grid.Column="0"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        SmallChange="5"
+                                        LargeChange="10"
+                                        TickFrequency="5"
+                                        Value="{Binding NotificationVolume, UpdateSourceTrigger=PropertyChanged}"
+                                        Thumb.DragCompleted="OnVolumeDragCompleted"
+                                        ValueChanged="OnVolumeValueChanged"
+                                        VerticalAlignment="Center"
+                                        Margin="0,0,12,0" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding NotificationVolume, StringFormat='{}{0}%'}"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Right"
+                                           FontFamily="Cascadia Mono, Consolas, monospace" />
+                            </Grid>
+                        </ui:CardControl>
+
+                        <TextBlock Text="What to notify me about" Style="{StaticResource SectionHeaderTextStyle}" />
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Review requests" FontWeight="SemiBold" />
+                                    <TextBlock Text="Someone asked you to review a pull request."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding NotifyReviewRequests}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Mentions and assignments" FontWeight="SemiBold" />
+                                    <TextBlock Text="You were @-mentioned, or an issue or PR was assigned to you."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding NotifyMentions}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="CI / check status changes" FontWeight="SemiBold" />
+                                    <TextBlock Text="A build or check finished on one of your pull requests."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding NotifyCi}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="All activity on watched repositories" FontWeight="SemiBold" />
+                                    <TextBlock Text="Anything at all in the repositories you watch, even when you're not involved."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding NotifyWatchedRepoActivity}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Issues &amp; PRs I'm involved in" FontWeight="SemiBold" />
+                                    <TextBlock Text="Follow-up activity on threads you authored or joined."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding NotifyParticipating}" />
+                        </ui:CardControl>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============================== Inbox ============================== -->
+                <ScrollViewer x:Name="InboxPane" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="Inbox" Style="{StaticResource PageTitleTextStyle}" />
+                        <TextBlock Text="How the tray flyout lays out and filters what it shows."
+                                   Style="{StaticResource PageDescriptionTextStyle}" />
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Group by repository" FontWeight="SemiBold" />
+                                    <TextBlock Text="Group inbox items under each repository. Off shows a single newest-first list."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding GroupByRepository}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Show read items" FontWeight="SemiBold" />
+                                    <TextBlock Text="Keep already-read items in the inbox (dimmed). Off shows only unread items."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding ShowReadItems}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Surface recently-modified items" FontWeight="SemiBold" />
+                                    <TextBlock Text="Show and notify on recently-updated items even if GitHub already marks them read (within ~2× the poll interval)."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding SurfaceRecentlyModified}" />
+                        </ui:CardControl>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============================= General ============================= -->
+                <ScrollViewer x:Name="GeneralPane" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="General" Style="{StaticResource PageTitleTextStyle}" />
+                        <TextBlock Text="How often Trayage checks in, how it looks, and how it starts."
+                                   Style="{StaticResource PageDescriptionTextStyle}" />
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Check for new activity every" FontWeight="SemiBold" />
+                                    <TextBlock Text="Applies to every account. A provider may ask for a slower floor."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
                             </ui:CardControl.Header>
                             <ComboBox ItemsSource="{Binding PollIntervalOptions}"
                                       DisplayMemberPath="Label"
@@ -463,83 +644,45 @@
                                       MinWidth="120" />
                         </ui:CardControl>
 
-                        <ui:CardControl Margin="0,0,0,12">
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
-                                <TextBlock Text="Theme" VerticalAlignment="Center" />
+                                <TextBlock Text="Theme" FontWeight="SemiBold" VerticalAlignment="Center" />
                             </ui:CardControl.Header>
                             <ComboBox ItemsSource="{Binding Themes}"
                                       SelectedItem="{Binding SelectedTheme}"
                                       MinWidth="120" />
                         </ui:CardControl>
 
-                        <ui:CardControl Margin="0,0,0,12">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Group by repository" FontWeight="SemiBold" />
-                                    <TextBlock Text="Group inbox items under each repository. Off shows a single newest-first list."
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <ui:ToggleSwitch IsChecked="{Binding GroupByRepository}" />
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="0,0,0,12">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Show read items" FontWeight="SemiBold" />
-                                    <TextBlock Text="Keep already-read items in the inbox (dimmed). Off shows only unread items."
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <ui:ToggleSwitch IsChecked="{Binding ShowReadItems}" />
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="0,0,0,12">
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Text="Surface recently-modified items" FontWeight="SemiBold" />
-                                    <TextBlock Text="Show and notify on recently-updated items even if GitHub already marks them read (within ~2× the poll interval)."
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <ui:ToggleSwitch IsChecked="{Binding SurfaceRecentlyModified}" />
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="0,0,0,12">
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
                                     <TextBlock Text="Start with Windows" FontWeight="SemiBold" />
                                     <TextBlock Text="Launch Trayage automatically when you sign in."
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                               Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
                             </ui:CardControl.Header>
                             <ui:ToggleSwitch IsChecked="{Binding StartWithWindows}" />
                         </ui:CardControl>
 
-                        <ui:CardControl Margin="0,0,0,12">
+                        <TextBlock Text="Diagnostics" Style="{StaticResource SectionHeaderTextStyle}" />
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
                                     <TextBlock Text="Verbose logging" FontWeight="SemiBold" />
                                     <TextBlock Text="Capture detailed (debug) logs for bug reports. Applies after restart."
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                               Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
                             </ui:CardControl.Header>
                             <ui:ToggleSwitch IsChecked="{Binding VerboseLogging}" />
                         </ui:CardControl>
 
-                        <ui:CardControl>
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
                                     <TextBlock Text="Diagnostic logs" FontWeight="SemiBold" />
                                     <TextBlock Text="Stored locally; contain no account names or tokens, so they're safe to attach to a bug report."
-                                               TextWrapping="Wrap"
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                               Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
                             </ui:CardControl.Header>
                             <ui:Button Content="Open logs folder"
@@ -548,7 +691,45 @@
                         </ui:CardControl>
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
-        </TabControl>
+
+                <!-- ============================== About ============================== -->
+                <ScrollViewer x:Name="AboutPane" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="About" Style="{StaticResource PageTitleTextStyle}" />
+                        <TextBlock Text="Trayage gathers your GitHub, Bitbucket Cloud, and GitLab activity into one tray inbox."
+                                   Style="{StaticResource PageDescriptionTextStyle}" />
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Version" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding AppVersion}" Style="{StaticResource MonoCaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:Button Content="Releases"
+                                       Icon="{ui:SymbolIcon Tag24}"
+                                       Command="{Binding OpenReleasesCommand}" />
+                        </ui:CardControl>
+
+                        <ui:CardControl Style="{StaticResource SettingsCardStyle}">
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Source and issues" FontWeight="SemiBold" />
+                                    <TextBlock Text="Every release ships with build provenance, a cosign signature, and an SBOM."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:Button Content="Open on GitHub"
+                                       Icon="{ui:SymbolIcon Open24}"
+                                       Command="{Binding OpenProjectCommand}" />
+                        </ui:CardControl>
+
+                        <TextBlock Text="Your tokens are encrypted at rest with Windows DPAPI and never leave this machine. Logs stay local and never contain tokens."
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   Margin="2,8,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
     </Grid>
 </ui:FluentWindow>

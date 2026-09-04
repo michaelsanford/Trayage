@@ -78,9 +78,9 @@ public sealed partial class InboxViewModel : ObservableObject
             // A provider that failed this refresh means the list the user is looking at is
             // incomplete. Say so rather than letting an unchanged (or emptier) list read as
             // "nothing new". Cleared on the next refresh that succeeds.
-            _degradedNotice = result.FailedProviders.Count == 0
+            _degradedNotice = result.Failures.Count == 0
                 ? null
-                : $"Couldn't reach {Join(result.FailedProviders)} — this list may be incomplete.";
+                : $"Couldn't reach {Join(result.Failures)} — this list may be incomplete.";
             Rebuild(force: true);
         }
         finally
@@ -89,8 +89,8 @@ public sealed partial class InboxViewModel : ObservableObject
         }
     }
 
-    private static string Join(IReadOnlyList<ProviderKind> providers) =>
-        string.Join(" and ", providers.Select(p => p.DisplayName()));
+    private static string Join(IReadOnlyList<ProviderFailure> failures) =>
+        string.Join(" and ", failures.Select(f => f.Label));
 
     [RelayCommand]
     private static void OpenItem(InboxItemViewModel? item)
@@ -159,12 +159,20 @@ public sealed partial class InboxViewModel : ObservableObject
         var settings = _settings.Load();
         var groupByRepo = settings.GroupByRepository;
         var includeRepo = !groupByRepo;
+
+        // Only name the account when it actually disambiguates — a single-account user should
+        // see exactly the subtitle they saw before accounts existed.
+        var labelsByAccount = settings.Accounts
+            .GroupBy(a => a.Provider)
+            .Where(g => g.Count() > 1)
+            .SelectMany(g => g)
+            .ToDictionary(a => a.Id, a => a.DisplayLabel, StringComparer.Ordinal);
         var now = DateTimeOffset.UtcNow;
         var recencyWindow = InboxRecency.WindowFor(settings);
 
         // Index the current wrappers so unchanged items keep their existing instance
         // (no allocation, no rebind) and only genuinely changed slots fire collection events.
-        var existing = new Dictionary<(ProviderKind, string), InboxItemViewModel>();
+        var existing = new Dictionary<(ProviderKind, string, string), InboxItemViewModel>();
         foreach (var vm in Items)
         {
             existing[vm.Item.Key] = vm;
@@ -183,14 +191,17 @@ public sealed partial class InboxViewModel : ObservableObject
 
             // Reuse only when the underlying (immutable) item is value-equal and the subtitle
             // layout, which depends on groupByRepo, hasn't flipped since the last render.
+            labelsByAccount.TryGetValue(item.AccountId, out var accountLabel);
+
             if (groupByRepo == _lastGroupByRepo &&
-                existing.TryGetValue(item.Key, out var vm) && vm.Item == item)
+                existing.TryGetValue(item.Key, out var vm) && vm.Item == item &&
+                vm.AccountLabel == accountLabel)
             {
                 target.Add(vm);
             }
             else
             {
-                target.Add(new InboxItemViewModel(item, includeRepoInSubtitle: includeRepo));
+                target.Add(new InboxItemViewModel(item, includeRepoInSubtitle: includeRepo, accountLabel: accountLabel));
             }
         }
 

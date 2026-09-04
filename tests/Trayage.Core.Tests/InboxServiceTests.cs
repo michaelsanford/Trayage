@@ -3,6 +3,7 @@ using NSubstitute;
 using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
 using Trayage.Core.Models;
+using Trayage.Core.Providers;
 
 namespace Trayage.Core.Tests;
 
@@ -10,33 +11,26 @@ public sealed class InboxServiceTests
 {
     private readonly ISettingsStore _settings = Substitute.For<ISettingsStore>();
     private readonly InboxState _state = new();
+    private readonly TrayageSettings _stored = new();
 
     public InboxServiceTests() =>
-        _settings.Load().Returns(new TrayageSettings());
+        _settings.Load().Returns(_stored);
 
     private InboxService NewService(params IInboxProvider[] providers) =>
-        new(providers, new InboxAggregator(), _state, _settings, NullLogger<InboxService>.Instance);
+        new(TestProviders.Registry(_settings, providers), new InboxAggregator(), _state, _settings,
+            NullLogger<InboxService>.Instance);
 
     private static IInboxProvider Provider(
         ProviderKind kind,
         bool connected = true,
-        params InboxItem[] items)
-    {
-        var provider = Substitute.For<IInboxProvider>();
-        provider.Provider.Returns(kind);
-        provider.IsConnected.Returns(connected);
-        provider.FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<InboxItem>>(items));
-        return provider;
-    }
+        params InboxItem[] items) =>
+        TestProviders.Provider(kind, accountId: kind.ToString(), connected: connected, items: items);
 
     [Fact]
     public async Task RefreshAsync_OneProviderThrows_KeepsHealthyProviderItems()
     {
         var healthy = Provider(ProviderKind.GitHub, items: TestData.Item("gh1"));
-        var failing = Substitute.For<IInboxProvider>();
-        failing.Provider.Returns(ProviderKind.Bitbucket);
-        failing.IsConnected.Returns(true);
+        var failing = TestProviders.Stub(ProviderKind.Bitbucket, accountId: "bb");
         failing.FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>())
             .Returns<Task<IReadOnlyList<InboxItem>>>(_ => throw new InvalidOperationException("boom"));
 
@@ -44,7 +38,7 @@ public sealed class InboxServiceTests
 
         Assert.Single(result.Items);
         Assert.Equal("gh1", result.Items[0].Id);
-        Assert.Equal(new[] { ProviderKind.Bitbucket }, result.FailedProviders);
+        Assert.Equal(new[] { "bb" }, result.Failures.Select(f => f.AccountId));
     }
 
     [Fact]
@@ -55,7 +49,7 @@ public sealed class InboxServiceTests
         var result = await NewService(disconnected).RefreshAsync(CancellationToken.None);
 
         Assert.Empty(result.Items);
-        Assert.Empty(result.FailedProviders);
+        Assert.Empty(result.Failures);
         await disconnected.DidNotReceive().FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>());
     }
 
@@ -79,9 +73,7 @@ public sealed class InboxServiceTests
         await cts.CancelAsync();
         var token = cts.Token;
 
-        var provider = Substitute.For<IInboxProvider>();
-        provider.Provider.Returns(ProviderKind.GitHub);
-        provider.IsConnected.Returns(true);
+        var provider = TestProviders.Stub(ProviderKind.GitHub);
         provider.FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>())
             .Returns<Task<IReadOnlyList<InboxItem>>>(_ => throw new OperationCanceledException(token));
 
@@ -90,15 +82,49 @@ public sealed class InboxServiceTests
     }
 
     [Fact]
-    public async Task RefreshAsync_ForwardsWatchedRepositoriesToProviders()
+    public async Task RefreshAsync_ForwardsTheAccountsOwnWatchedRepositories()
     {
-        _settings.Load().Returns(new TrayageSettings { WatchedRepositories = { "acme/widgets" } });
         var provider = Provider(ProviderKind.GitHub);
+        var service = NewService(provider);
+        _stored.FindAccount("GitHub")!.WatchedRepositories.Add("acme/widgets");
 
-        await NewService(provider).RefreshAsync(CancellationToken.None);
+        await service.RefreshAsync(CancellationToken.None);
 
         await provider.Received().FetchInboxAsync(
             Arg.Is<InboxQuery>(q => q.WatchedRepositories.Contains("acme/widgets")),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RefreshAsync_EachAccountGetsOnlyItsOwnWatchedRepositories()
+    {
+        // A repo one account can see must not be queried with another account's token.
+        var first = TestProviders.Provider(ProviderKind.Bitbucket, accountId: "bb1");
+        var second = TestProviders.Provider(ProviderKind.Bitbucket, accountId: "bb2");
+        var service = NewService(first, second);
+        _stored.FindAccount("bb1")!.WatchedRepositories.Add("first/only");
+        _stored.FindAccount("bb2")!.WatchedRepositories.Add("second/only");
+
+        await service.RefreshAsync(CancellationToken.None);
+
+        await first.Received().FetchInboxAsync(
+            Arg.Is<InboxQuery>(q => q.WatchedRepositories.SequenceEqual(new[] { "first/only" })),
+            Arg.Any<CancellationToken>());
+        await second.Received().FetchInboxAsync(
+            Arg.Is<InboxQuery>(q => q.WatchedRepositories.SequenceEqual(new[] { "second/only" })),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RefreshAsync_SkipsPausedAccounts()
+    {
+        var provider = Provider(ProviderKind.GitHub, items: TestData.Item("gh1"));
+        var service = NewService(provider);
+        _stored.FindAccount("GitHub")!.Enabled = false;
+
+        var result = await service.RefreshAsync(CancellationToken.None);
+
+        Assert.Empty(result.Items);
+        await provider.DidNotReceive().FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>());
     }
 }

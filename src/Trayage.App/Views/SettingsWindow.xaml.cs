@@ -1,3 +1,6 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using Trayage.App.ViewModels;
 
 namespace Trayage.App.Views;
@@ -13,9 +16,15 @@ public partial class SettingsWindow
         // Height tracks 60% of the screen's work area (rather than a fixed value) so the long
         // Settings panes get more room and scale with the monitor. Clamped to MinHeight and the
         // available height so it never shrinks below usable or overflows the screen.
-        var workAreaHeight = System.Windows.SystemParameters.WorkArea.Height;
+        var workAreaHeight = SystemParameters.WorkArea.Height;
         Height = Math.Clamp(workAreaHeight * 0.6, MinHeight, workAreaHeight);
     }
+
+    /// <summary>The panes, in the same order as the navigation rail's items.</summary>
+    private UIElement[] Panes => field ??= new UIElement[]
+    {
+        AccountsPane, NotificationsPane, InboxPane, GeneralPane, AboutPane,
+    };
 
     /// <summary>Brings the window to the front, restoring it if minimised or hidden.</summary>
     public void ShowAndActivate()
@@ -24,9 +33,9 @@ public partial class SettingsWindow
         (DataContext as SettingsViewModel)?.RefreshNotificationAvailability();
 
         Show();
-        if (WindowState == System.Windows.WindowState.Minimized)
+        if (WindowState == WindowState.Minimized)
         {
-            WindowState = System.Windows.WindowState.Normal;
+            WindowState = WindowState.Normal;
         }
 
         Activate();
@@ -35,21 +44,58 @@ public partial class SettingsWindow
         Focus();
     }
 
-    // Lazily discover Bitbucket repositories the first time that tab is opened (while connected),
-    // so the picker fills itself instead of needing an explicit "load" click. The result is cached
-    // for the window's lifetime; the in-pane Refresh button reloads on demand.
-    private void OnTabSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    /// <summary>Shows the pane matching the rail's selection and hides the rest.</summary>
+    private void OnNavigationSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // TabControl.SelectionChanged also bubbles up from ComboBoxes inside the tabs; only act on
-        // the TabControl's own selection change.
-        if (e.OriginalSource is not System.Windows.Controls.TabControl tabControl)
+        // ComboBoxes inside the panes also raise SelectionChanged, which bubbles; only act on
+        // the rail's own selection change.
+        if (!ReferenceEquals(e.OriginalSource, Nav))
         {
             return;
         }
 
-        if (ReferenceEquals(tabControl.SelectedItem, BitbucketTab))
+        var selected = Nav.SelectedIndex;
+        for (var i = 0; i < Panes.Length; i++)
         {
-            (DataContext as SettingsViewModel)?.EnsureBitbucketReposLoaded();
+            Panes[i].Visibility = i == selected ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // Entering Accounts kicks off Bitbucket repository discovery so each account's picker is
+        // populated by the time its card is expanded.
+        if (selected == 0)
+        {
+            (DataContext as SettingsViewModel)?.EnsureAccountReposLoaded();
+        }
+    }
+
+    /// <summary>
+    /// Loads an account's repositories the first time its card is opened. Cheap to call again —
+    /// the view-model only fetches once per account.
+    /// </summary>
+    private void OnAccountExpanded(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ProviderAccountViewModel account })
+        {
+            account.EnsureReposLoaded();
+        }
+    }
+
+    /// <summary>
+    /// Commits the volume when the slider thumb is released. Persisting on every value change
+    /// would rewrite settings.json — and replay the preview sound — for each pixel of travel.
+    /// </summary>
+    private void OnVolumeDragCompleted(object sender, DragCompletedEventArgs e) =>
+        (DataContext as SettingsViewModel)?.CommitVolume();
+
+    /// <summary>
+    /// Commits a volume change that didn't come from a drag — a click on the track, or the
+    /// arrow keys — which produce no DragCompleted.
+    /// </summary>
+    private void OnVolumeValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (sender is Slider { IsMouseCaptureWithin: false })
+        {
+            (DataContext as SettingsViewModel)?.CommitVolume();
         }
     }
 

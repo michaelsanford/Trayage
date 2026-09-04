@@ -177,4 +177,49 @@ public sealed class JsonSettingsStoreTests : IDisposable
             File.Delete(_path);
         }
     }
+    [Fact]
+    public void SaveThenLoad_RoundTripsAccounts()
+    {
+        var store = NewStore();
+        var settings = store.Load();
+        settings.SchemaVersion = 1;
+        settings.Accounts.Add(new ProviderAccount
+        {
+            Id = "work",
+            Provider = ProviderKind.Bitbucket,
+            AccountLogin = "someone",
+            Nickname = "Work",
+            Connected = true,
+            WatchedRepositories = { "acme/widgets" },
+        });
+        store.Save(settings);
+
+        // A fresh store, so this reads the file rather than the in-memory cache.
+        var reloaded = NewStore().Load();
+        var account = Assert.Single(reloaded.Accounts);
+
+        Assert.Equal(1, reloaded.SchemaVersion);
+        Assert.Equal("work", account.Id);
+        Assert.Equal(ProviderKind.Bitbucket, account.Provider);
+        Assert.Equal("Work", account.Nickname);
+        Assert.True(account.Connected);
+        Assert.True(account.Enabled);
+        Assert.Equal(new[] { "acme/widgets" }, account.WatchedRepositories);
+    }
+
+    [Fact]
+    public void Load_PreAccountsFile_StillDeserialisesTheLegacySlots()
+    {
+        // The migration reads these, so they must survive a round trip through the model.
+        File.WriteAllText(_path,
+            "{\"GitHub\":{\"Connected\":true,\"AccountLogin\":\"octocat\"},\"WatchedRepositories\":[\"acme/widgets\"]}");
+
+        var settings = NewStore().Load();
+
+        Assert.Equal(0, settings.SchemaVersion);
+        Assert.True(settings.GitHub.Connected);
+        Assert.Equal("octocat", settings.GitHub.AccountLogin);
+        Assert.Equal(new[] { "acme/widgets" }, settings.WatchedRepositories);
+        Assert.Empty(settings.Accounts);
+    }
 }

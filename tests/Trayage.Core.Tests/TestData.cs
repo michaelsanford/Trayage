@@ -11,10 +11,12 @@ internal static class TestData
         InboxItemKind kind = InboxItemKind.ReviewRequest,
         string repo = "octocat/hello-world",
         DateTimeOffset? updatedAt = null,
-        bool unread = true) => new()
+        bool unread = true,
+        string accountId = "acct1") => new()
         {
             Id = id,
             Provider = provider,
+            AccountId = accountId,
             Kind = kind,
             Title = $"Item {id}",
             RepositoryFullName = repo,

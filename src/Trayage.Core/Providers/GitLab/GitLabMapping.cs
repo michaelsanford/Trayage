@@ -21,7 +21,7 @@ public static class GitLabActionMapper
 /// <summary>Translates a GitLab to-do into a provider-agnostic <see cref="InboxItem"/>.</summary>
 public static class GitLabMapping
 {
-    public static InboxItem ToInboxItem(GitLabTodo todo)
+    public static InboxItem ToInboxItem(GitLabTodo todo, string accountId)
     {
         var repo = todo.Project?.PathWithNamespace ?? "unknown/unknown";
         var title = !string.IsNullOrWhiteSpace(todo.Target?.Title)
@@ -34,6 +34,7 @@ public static class GitLabMapping
         {
             Id = $"todo:{todo.Id}",
             Provider = ProviderKind.GitLab,
+            AccountId = accountId,
             Kind = GitLabActionMapper.ToKind(todo.ActionName),
             Title = title,
             RepositoryFullName = repo,

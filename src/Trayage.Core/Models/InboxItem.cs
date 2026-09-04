@@ -60,6 +60,13 @@ public sealed record InboxItem
 
     public required ProviderKind Provider { get; init; }
 
+    /// <summary>
+    /// The account this item was fetched with (<c>ProviderAccount.Id</c>). Part of the identity:
+    /// two accounts on one provider can legitimately surface the same underlying thread id, and
+    /// both must survive de-duplication.
+    /// </summary>
+    public required string AccountId { get; init; }
+
     public required InboxItemKind Kind { get; init; }
 
     public required string Title { get; init; }
@@ -80,5 +87,5 @@ public sealed record InboxItem
     public bool IsUnread { get; init; } = true;
 
     /// <summary>Stable cross-snapshot key: a given thread keeps the same key over time.</summary>
-    public (ProviderKind, string) Key => (Provider, Id);
+    public (ProviderKind, string, string) Key => (Provider, AccountId, Id);
 }

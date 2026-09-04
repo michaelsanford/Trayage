@@ -13,11 +13,19 @@ public sealed class InboxItemViewModel
     /// True when the list is flat (sequential), so the repository name is shown in the
     /// subtitle; false when grouped by repository (the group header already shows it).
     /// </param>
-    public InboxItemViewModel(InboxItem item, bool includeRepoInSubtitle = false)
+    /// <param name="accountLabel">
+    /// Which account this item arrived through, shown only when more than one account is
+    /// connected to the same provider; null otherwise, so single-account users see no change.
+    /// </param>
+    public InboxItemViewModel(InboxItem item, bool includeRepoInSubtitle = false, string? accountLabel = null)
     {
         Item = item;
         _includeRepoInSubtitle = includeRepoInSubtitle;
+        AccountLabel = accountLabel;
     }
+
+    /// <summary>The account this item came from, or null when naming it wouldn't disambiguate.</summary>
+    public string? AccountLabel { get; }
 
     public InboxItem Item { get; }
 
@@ -81,9 +89,26 @@ public sealed class InboxItemViewModel
 
     public string RelativeTime => FormatRelative(Item.UpdatedAt);
 
-    public string Subtitle => _includeRepoInSubtitle
-        ? $"{RepositoryFullName} · {KindLabel} · {RelativeTime}"
-        : $"{KindLabel} · {RelativeTime}";
+    public string Subtitle
+    {
+        get
+        {
+            var parts = new List<string>(4);
+            if (_includeRepoInSubtitle)
+            {
+                parts.Add(RepositoryFullName);
+            }
+
+            parts.Add(KindLabel);
+            if (AccountLabel is { Length: > 0 } account)
+            {
+                parts.Add(account);
+            }
+
+            parts.Add(RelativeTime);
+            return string.Join(" · ", parts);
+        }
+    }
 
     private static string FormatRelative(DateTimeOffset when)
     {

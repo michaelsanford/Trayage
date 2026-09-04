@@ -4,6 +4,7 @@ using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
 using Trayage.Core.Models;
 using Trayage.Core.Notifications;
+using Trayage.Core.Providers;
 
 namespace Trayage.Core.Tests;
 
@@ -23,10 +24,7 @@ public sealed class InboxPollingServiceTests
     {
         _settings.Load().Returns(settings);
 
-        var provider = Substitute.For<IInboxProvider>();
-        provider.Provider.Returns(ProviderKind.GitHub);
-        provider.IsConnected.Returns(true);
-        provider.SuggestedPollInterval.Returns(suggestedPollInterval);
+        var provider = TestProviders.Stub(suggestedPollInterval: suggestedPollInterval);
         if (snapshotsPerPoll.Length > 0)
         {
             var tasks = snapshotsPerPoll.Select(Task.FromResult).ToArray();
@@ -34,9 +32,15 @@ public sealed class InboxPollingServiceTests
                 .Returns(tasks[0], tasks.Skip(1).ToArray());
         }
 
-        var providers = new[] { provider };
+        return NewPoller(provider);
+    }
+
+    /// <summary>Wires a polling service around the supplied stub providers.</summary>
+    private InboxPollingService NewPoller(params IInboxProvider[] providers)
+    {
+        var registry = TestProviders.Registry(_settings, providers);
         var inboxService = new InboxService(
-            providers, new InboxAggregator(), new InboxState(), _settings, NullLogger<InboxService>.Instance);
+            registry, new InboxAggregator(), new InboxState(), _settings, NullLogger<InboxService>.Instance);
 
         return new InboxPollingService(
             inboxService,
@@ -44,7 +48,7 @@ public sealed class InboxPollingServiceTests
             new NotificationRuleEngine(),
             _notifier,
             _settings,
-            providers,
+            registry,
             NullLogger<InboxPollingService>.Instance);
     }
 
@@ -58,11 +62,13 @@ public sealed class InboxPollingServiceTests
     private InboxPollingService NewHealthService(params int[] throwsOnCycle)
     {
         _settings.Load().Returns(new TrayageSettings());
+        return NewPoller(FlakyProvider("acct1", throwsOnCycle));
+    }
 
-        var provider = Substitute.For<IInboxProvider>();
-        provider.Provider.Returns(ProviderKind.GitHub);
-        provider.IsConnected.Returns(true);
-
+    /// <summary>A provider that throws on the listed (0-based) cycles and returns empty otherwise.</summary>
+    private static IInboxProvider FlakyProvider(string accountId, params int[] throwsOnCycle)
+    {
+        var provider = TestProviders.Stub(accountId: accountId);
         var throwing = new HashSet<int>(throwsOnCycle);
         var cycle = 0;
         provider.FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>())
@@ -77,18 +83,7 @@ public sealed class InboxPollingServiceTests
                 return Task.FromResult<IReadOnlyList<InboxItem>>(Array.Empty<InboxItem>());
             });
 
-        var providers = new[] { provider };
-        var inboxService = new InboxService(
-            providers, new InboxAggregator(), new InboxState(), _settings, NullLogger<InboxService>.Instance);
-
-        return new InboxPollingService(
-            inboxService,
-            new InboxDiffer(),
-            new NotificationRuleEngine(),
-            _notifier,
-            _settings,
-            providers,
-            NullLogger<InboxPollingService>.Instance);
+        return provider;
     }
 
     [Fact]
@@ -116,6 +111,26 @@ public sealed class InboxPollingServiceTests
         _notifier.Received(1).ShowMessage(
             Arg.Is<string>(t => t.Contains("sync failed")), Arg.Any<string>(), Arg.Any<string?>());
         _notifier.Received(1).ShowMessage(
+            Arg.Is<string>(t => t.Contains("sync restored")), Arg.Any<string>(), Arg.Any<string?>());
+    }
+
+    [Fact]
+    public async Task OneAccountFails_OtherAccountOnSameProviderIsUnaffected()
+    {
+        // Failure state is keyed by account, so a healthy sibling neither alerts nor clears
+        // the failing account's alert.
+        _settings.Load().Returns(new TrayageSettings());
+        var failing = FlakyProvider("gh-work", 0, 1);
+        var healthy = FlakyProvider("gh-personal");
+        var service = NewPoller(failing, healthy);
+
+        await service.PollOnceAsync(CancellationToken.None);
+        await service.PollOnceAsync(CancellationToken.None);
+
+        _notifier.Received(1).ShowMessage(
+            Arg.Is<string>(t => t.Contains("gh-work") && t.Contains("sync failed")),
+            Arg.Any<string>(), Arg.Any<string?>());
+        _notifier.DidNotReceive().ShowMessage(
             Arg.Is<string>(t => t.Contains("sync restored")), Arg.Any<string>(), Arg.Any<string?>());
     }
 

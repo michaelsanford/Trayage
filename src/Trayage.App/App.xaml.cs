@@ -15,6 +15,8 @@ using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
 using Trayage.Core.Models;
 using Trayage.Core.Notifications;
+using Trayage.Core.Providers;
+using Trayage.Core.Security;
 using Microsoft.Windows.AppLifecycle;
 using Microsoft.Windows.AppNotifications;
 
@@ -106,6 +108,17 @@ public partial class App
         builder.ConfigureTrayageServices();
         _host = builder.Build();
 
+        // Upgrade a pre-accounts settings.json (and re-key its tokens) *before* anything reads
+        // accounts — the hosted poller resolves providers as soon as the host starts.
+        var migrationLogger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Trayage.Migration");
+        SettingsMigration.Run(
+            _host.Services.GetRequiredService<ISettingsStore>(),
+            _host.Services.GetRequiredService<ISecretStore>(),
+            migrationLogger);
+
+        // Build one provider instance per configured account.
+        _host.Services.GetRequiredService<ProviderRegistry>().Initialize();
+
         await _host.StartAsync();
 
         var settingsStore = _host.Services.GetRequiredService<ISettingsStore>();
@@ -132,6 +145,7 @@ public partial class App
         // The hosted InboxPollingService performs the first (and recurring) refreshes.
         var inboxState = _host.Services.GetRequiredService<InboxState>();
         inboxState.Changed += (_, _) => RefreshTrayStatus();
+        _host.Services.GetRequiredService<ProviderRegistry>().Changed += OnProviderRegistryChanged;
         RefreshTrayStatus();
 
         // On the very first launch, pop the inbox flyout so it's obvious Trayage started
@@ -300,6 +314,9 @@ public partial class App
 
     private void ShowInboxFlyout() => Flyout.ShowNearTray();
 
+    /// <summary>Re-renders the tray when accounts are added or removed.</summary>
+    private void OnProviderRegistryChanged(object? sender, EventArgs e) => RefreshTrayStatus();
+
     private void RefreshInbox()
     {
         var inboxService = _host!.Services.GetRequiredService<InboxService>();
@@ -323,8 +340,8 @@ public partial class App
         }
 
         var settings = _host.Services.GetRequiredService<ISettingsStore>().Load();
-        var configured = settings.GitHub.Connected || settings.Bitbucket.Connected;
-        var liveConnected = _host.Services.GetServices<IInboxProvider>().Any(p => p.IsConnected);
+        var configured = settings.Accounts.Any(a => a.Connected);
+        var liveConnected = _host.Services.GetRequiredService<ProviderRegistry>().All.Any(p => p.IsConnected);
 
         var inboxState = _host.Services.GetRequiredService<InboxState>();
 
@@ -380,7 +397,7 @@ public partial class App
 
         state.Set(new List<InboxItem>(state.Items) { item });
 
-        foreach (var notifiable in rules.SelectNotifiable(new[] { item }, settings.Notifications, settings.WatchedRepositories, DateTimeOffset.UtcNow, InboxRecency.WindowFor(settings)))
+        foreach (var notifiable in rules.SelectNotifiable(new[] { item }, settings.Notifications, settings.AllWatchedRepositories, DateTimeOffset.UtcNow, InboxRecency.WindowFor(settings)))
         {
             notifier.Show(notifiable);
         }
@@ -399,6 +416,7 @@ public partial class App
         {
             Id = $"debug-{provider}-{kind}-{DateTimeOffset.UtcNow.Ticks}",
             Provider = provider,
+            AccountId = "debug",
             Kind = kind,
             Title = $"[debug] {provider} {kind} — click me",
             RepositoryFullName = "michaelsanford/Trayage",

@@ -36,7 +36,7 @@ public sealed class GitLabMappingTests
             Target = new GitLabTarget { Title = "Add widget" },
         };
 
-        var item = GitLabMapping.ToInboxItem(todo);
+        var item = GitLabMapping.ToInboxItem(todo, "acct1");
 
         Assert.Equal("todo:42", item.Id);
         Assert.Equal(ProviderKind.GitLab, item.Provider);
@@ -59,14 +59,14 @@ public sealed class GitLabMappingTests
             Project = new GitLabProject { PathWithNamespace = "acme/widgets" },
         };
 
-        var item = GitLabMapping.ToInboxItem(bodyOnly);
+        var item = GitLabMapping.ToInboxItem(bodyOnly, "acct1");
 
         // No target title → use body; no target_url → repo home page.
         Assert.Equal("Pipeline notice", item.Title);
         Assert.Equal("https://gitlab.com/acme/widgets", item.WebUrl);
 
         var empty = new GitLabTodo { Id = 9 };
-        var fallback = GitLabMapping.ToInboxItem(empty);
+        var fallback = GitLabMapping.ToInboxItem(empty, "acct1");
         Assert.Equal("(no title)", fallback.Title);
         Assert.Equal("unknown/unknown", fallback.RepositoryFullName);
     }
