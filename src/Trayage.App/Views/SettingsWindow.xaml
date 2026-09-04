@@ -305,7 +305,6 @@
                      Width="168"
                      Background="Transparent"
                      BorderThickness="0"
-                     SelectedIndex="0"
                      SelectionChanged="OnNavigationSelectionChanged">
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
@@ -419,8 +418,11 @@
                                     <ContextMenu.ItemContainerStyle>
                                         <Style TargetType="MenuItem">
                                             <Setter Property="Header" Value="{Binding Label}" />
+                                            <!-- The menu lives in a popup outside the window's visual tree,
+                                                 so reach the view-model through the button the menu is
+                                                 placed on rather than an ancestor DataContext lookup. -->
                                             <Setter Property="Command"
-                                                    Value="{Binding DataContext.AddAccountCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                                    Value="{Binding PlacementTarget.DataContext.AddAccountCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                             <Setter Property="CommandParameter" Value="{Binding}" />
                                         </Style>
                                     </ContextMenu.ItemContainerStyle>

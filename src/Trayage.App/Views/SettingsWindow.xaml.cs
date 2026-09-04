@@ -18,6 +18,10 @@ public partial class SettingsWindow
         // available height so it never shrinks below usable or overflows the screen.
         var workAreaHeight = SystemParameters.WorkArea.Height;
         Height = Math.Clamp(workAreaHeight * 0.6, MinHeight, workAreaHeight);
+
+        // Select the first page only once the panes exist — the rail raises SelectionChanged
+        // while InitializeComponent is still running, before the generated fields are assigned.
+        Nav.SelectedIndex = 0;
     }
 
     /// <summary>The panes, in the same order as the navigation rail's items.</summary>
