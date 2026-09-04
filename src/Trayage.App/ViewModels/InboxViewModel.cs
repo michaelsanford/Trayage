@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
@@ -141,11 +141,20 @@ public sealed partial class InboxViewModel : ObservableObject
     /// </summary>
     private string? _degradedNotice;
 
+    /// <summary>
+    /// Re-renders from the cached snapshot. This parameterless overload exists so the method
+    /// group can be passed straight to <see cref="System.Windows.Threading.Dispatcher.Invoke(Action)"/>:
+    /// with only the optional-parameter form, the method group's natural type is
+    /// <c>Action&lt;bool&gt;</c>, which silently binds to the <c>Invoke(Delegate, params object[])</c>
+    /// overload and throws TargetParameterCountException at runtime.
+    /// </summary>
+    private void Rebuild() => Rebuild(force: false);
+
     /// <param name="force">
     /// Re-render the status line even when no item moved — needed when only
     /// <see cref="_degradedNotice"/> changed.
     /// </param>
-    private void Rebuild(bool force = false)
+    private void Rebuild(bool force)
     {
         var settings = _settings.Load();
         var groupByRepo = settings.GroupByRepository;
