@@ -48,13 +48,19 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
 
 - **Unified inbox** in a tray flyout — grouped by repository or as a flat newest-first
   list, with the option to hide already-read items. Click any item to open it in your browser.
+- **Several accounts per service** — a work and a personal GitHub, two Bitbucket workspaces
+  under different logins. Each account keeps its own sign-in, its own watched repositories,
+  and can be paused without disconnecting it. When more than one account is connected to the
+  same service, inbox items say which one they came from.
 - **Sources**
   - **GitHub** via the notifications API — review requests, mentions, assignments, CI
     activity, and watched-repo activity.
   - **Bitbucket Cloud** via pull-request queries — PRs you authored, PRs in watched repos
     where you're a reviewer, and all activity in watched repos. Because Bitbucket has no
-    notification inbox, the **Bitbucket** settings tab lets you load the repositories you
-    can access and toggle the ones to watch (no need to type `owner/repo` by hand).
+    notification inbox, each Bitbucket account's card in **Settings → Accounts** lets you load
+    the repositories that account can reach and toggle the ones to watch (no need to type
+    `owner/repo` by hand). Watched repositories are per account, so a repository only one
+    account can see is never queried with another's token.
   - **GitLab.com** via the to-do API — assignments, mentions, review/approval requests,
     failed pipelines, and other to-dos. Like GitHub, GitLab has a centralized server-side
     inbox, so there's nothing to configure per-repository.
@@ -68,13 +74,15 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
   blue with an **amber top bar** when items are waiting, plain blue when you're caught up,
   **grey** when nothing is connected, and **red** when an account is configured but has no
   live session.
-- **Settings** window (Accounts, Notifications, Bitbucket, GitHub, General): poll cadence,
-  light/dark/system theme, inbox grouping and read-item visibility, verbose logging, and
-  "start with Windows". The **Bitbucket** tab is the watched-repo picker; the **GitHub** tab
-  links out to GitHub's own watching and notification settings (which is where GitHub
-  activity is controlled).
-- **Secure tokens** — OAuth tokens are encrypted at rest with Windows DPAPI; nothing is
-  stored in plaintext.
+- **Settings** window with five pages — **Accounts**, **Notifications**, **Inbox**,
+  **General**, and **About**. **Accounts** is the list of connected accounts: expand one to
+  rename it, pause it, disconnect or remove it, pick its watched repositories (Bitbucket), or
+  jump to the service's own notification settings (GitHub and GitLab, where that activity is
+  actually controlled). The rest cover notification classes and sound, inbox grouping and
+  read-item visibility, poll cadence, light/dark/system theme, "start with Windows", and
+  verbose logging.
+- **Secure tokens** — OAuth tokens are encrypted at rest with Windows DPAPI, keyed per
+  account; nothing is stored in plaintext.
 
 ## Requirements
 
@@ -107,8 +115,8 @@ Everything lives under `%APPDATA%\Trayage\`:
 
 | File | Contents |
 | --- | --- |
-| `settings.json` | Non-secret settings (poll interval, theme, watched repos, connection state) |
-| `secrets.dat` | OAuth access/refresh tokens, each encrypted with DPAPI (CurrentUser) |
+| `settings.json` | Non-secret settings (poll interval, theme, and the connected accounts with their watched repos) |
+| `secrets.dat` | OAuth access/refresh tokens, one set per account, each encrypted with DPAPI (CurrentUser) |
 | `logs\trayage.log` | Rolling application log |
 | `logs\crash.log` | Unhandled-exception records |
 
@@ -143,7 +151,7 @@ Register one OAuth app per provider (once), then drop the identifiers into a git
   and the **Secret**. Two read permissions are load-bearing, and they are **separate
   checkboxes**: **Account** backs the `/2.0/user` and `/2.0/user/workspaces` calls (workspace
   discovery), and **Repositories** backs the per-workspace repo listing
-  (`/2.0/repositories/{workspace}`) behind the **Bitbucket** settings tab. *"Pull requests:
+  (`/2.0/repositories/{workspace}`) behind each Bitbucket account's repository picker. *"Pull requests:
   Read"* does **not** grant repository listing — enable **Repositories: Read** explicitly.
   Trayage logs the token's granted scopes on connect (`Bitbucket token scopes: …`); if the
   picker errors or shows nothing, check that line for `account` and `repository`. A token only
@@ -208,21 +216,24 @@ cosign verify-blob `
   inbox from pull-request queries only.
 - **Bitbucket PRs surface only for watched repos.** Bitbucket retired its cross-repo
   endpoints (CHANGE-2770), so authored PRs, review requests, and repo activity are all
-  queried per watched repo. A PR appears only if its repository is on your watched list — add
-  repositories from the **Bitbucket** settings tab.
+  queried per watched repo. A PR appears only if its repository is on that account's watched
+  list — add repositories from the account's card in **Settings → Accounts**.
 - **Bitbucket loopback port is fixed** at `33418` to match the consumer callback URL. If
-  that port is in use, the connect step will report an error.
+  that port is in use, the connect step will report an error. It also means only one Bitbucket
+  account can be authorized at a time — connect them one after another.
 
 ## Architecture
 
 | Project | Responsibility |
 | --- | --- |
 | `Trayage.App` | WPF + WPF-UI shell: tray icon, inbox flyout, Settings window, toast notifier, host/DI |
-| `Trayage.Core` | Provider abstraction, inbox aggregation & diffing, polling, notification rules, settings, DPAPI secret store, GitHub, Bitbucket & GitLab providers |
+| `Trayage.Core` | Provider abstraction & per-account registry, inbox aggregation & diffing, polling, notification rules, settings & migration, DPAPI secret store, GitHub, Bitbucket & GitLab providers |
 | `Trayage.Core.Tests` | xUnit tests for the inbox/notification/settings/secret-store logic |
 
-Providers implement `IInboxProvider` and translate their native payloads into a shared
-`InboxItem`. `InboxPollingService` refreshes on an interval, the `InboxDiffer` detects new
+Providers implement `IInboxProvider`, one instance per connected account, and translate their
+native payloads into a shared `InboxItem`. `ProviderFactory` builds them and `ProviderRegistry`
+owns the live set, so connecting or removing an account takes effect on the next poll rather
+than after a restart. `InboxPollingService` refreshes on an interval, the `InboxDiffer` detects new
 activity, and the `NotificationRuleEngine` decides what becomes a toast. The first poll
 after launch is silent so you aren't flooded with notifications for items already waiting.
 

@@ -48,16 +48,19 @@
         <p>Everything Trayage stores lives only on your own machine, under
           <code>%APPDATA%\Trayage</code>, and is never transmitted to us:</p>
         <ul>
-          <li><strong>OAuth tokens</strong> — encrypted at rest with Windows DPAPI (per-user, per-machine).</li>
-          <li><strong>Settings</strong> — your poll interval, theme, and watched repositories.</li>
+          <li><strong>OAuth tokens</strong> — one set per connected account, each encrypted at rest
+            with Windows DPAPI (per-user, per-machine).</li>
+          <li><strong>Settings</strong> — your poll interval, theme, and the accounts you have
+            connected along with the repositories each one watches.</li>
           <li><strong>Logs</strong> — a local application log and crash log for troubleshooting.
             Tokens are never written to them, and account identifiers (your provider login and
             user ID) are kept out on a best-effort basis.</li>
         </ul>
 
         <h3>Where your data goes</h3>
-        <p>Trayage talks <strong>directly</strong> to GitHub and Bitbucket from your machine, as you,
-          using the tokens you authorised — solely to read your inbox and open pages you click.
+        <p>Trayage talks <strong>directly</strong> to GitHub, Bitbucket and GitLab from your machine,
+          as you, using the tokens you authorised — solely to read your inbox and open pages you click.
+          Each account is used only against its own service.
           There is no Trayage server in the middle. Your use of those services is governed by
           their own privacy policies, not this one.</p>
 
