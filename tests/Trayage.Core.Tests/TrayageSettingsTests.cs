@@ -120,4 +120,77 @@ public sealed class TrayageSettingsTests
         var settings = new NotificationSettings();
         Assert.Equal(50, settings.Volume);
     }
+    [Fact]
+    public void Clone_CarriesAccounts()
+    {
+        // Clone is hand-written field by field, and JsonSettingsStore hands every caller a clone
+        // — anything it forgets is silently lost on the next load.
+        var original = new TrayageSettings
+        {
+            SchemaVersion = 1,
+            Accounts =
+            {
+                new ProviderAccount
+                {
+                    Id = "a", Provider = ProviderKind.Bitbucket, AccountLogin = "someone",
+                    Nickname = "Work", Connected = true, Enabled = false, BaseUrl = "https://example.test",
+                    WatchedRepositories = { "acme/widgets" },
+                },
+            },
+        };
+
+        var clone = original.Clone();
+        var account = Assert.Single(clone.Accounts);
+
+        Assert.Equal(1, clone.SchemaVersion);
+        Assert.Equal("a", account.Id);
+        Assert.Equal(ProviderKind.Bitbucket, account.Provider);
+        Assert.Equal("someone", account.AccountLogin);
+        Assert.Equal("Work", account.Nickname);
+        Assert.True(account.Connected);
+        Assert.False(account.Enabled);
+        Assert.Equal("https://example.test", account.BaseUrl);
+        Assert.Equal(new[] { "acme/widgets" }, account.WatchedRepositories);
+    }
+
+    [Fact]
+    public void Clone_DeepCopiesAccounts_SoMutatingTheCloneCantCorruptTheCache()
+    {
+        var original = new TrayageSettings
+        {
+            Accounts = { new ProviderAccount { Id = "a", Provider = ProviderKind.GitHub } },
+        };
+
+        var clone = original.Clone();
+        clone.Accounts[0].Nickname = "Renamed";
+        clone.Accounts[0].WatchedRepositories.Add("acme/widgets");
+        clone.Accounts.Add(new ProviderAccount { Id = "b", Provider = ProviderKind.GitLab });
+
+        Assert.Single(original.Accounts);
+        Assert.Null(original.Accounts[0].Nickname);
+        Assert.Empty(original.Accounts[0].WatchedRepositories);
+    }
+
+    [Fact]
+    public void AllWatchedRepositories_UnionsAccounts_AndDeduplicates()
+    {
+        var settings = new TrayageSettings
+        {
+            Accounts =
+            {
+                new ProviderAccount { Id = "a", Provider = ProviderKind.Bitbucket, WatchedRepositories = { "acme/widgets", "shared/repo" } },
+                new ProviderAccount { Id = "b", Provider = ProviderKind.Bitbucket, WatchedRepositories = { "SHARED/REPO", "other/thing" } },
+            },
+        };
+
+        Assert.Equal(
+            new[] { "acme/widgets", "other/thing", "shared/repo" },
+            settings.AllWatchedRepositories.Order(StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void FindAccount_ReturnsNull_WhenTheAccountHasBeenRemoved()
+    {
+        Assert.Null(new TrayageSettings().FindAccount("gone"));
+    }
 }

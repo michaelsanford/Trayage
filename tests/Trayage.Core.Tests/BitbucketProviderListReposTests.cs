@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Trayage.Core.Configuration;
+using Trayage.Core.Models;
+using Trayage.Core.Providers;
 using Trayage.Core.Providers.Bitbucket;
 using Trayage.Core.Security;
 
@@ -20,15 +22,24 @@ public sealed class BitbucketProviderListReposTests
     private const string TokenJson =
         "{\"access_token\":\"at\",\"refresh_token\":\"rt\",\"expires_in\":3600,\"scopes\":\"account repository\"}";
 
+    private const string AccountId = "acct1";
+
     private readonly ISecretStore _secrets = Substitute.For<ISecretStore>();
     private readonly ISettingsStore _settings = Substitute.For<ISettingsStore>();
+    private readonly ProviderAccountContext _account;
 
     public BitbucketProviderListReposTests()
     {
-        _settings.Load().Returns(new TrayageSettings());
+        var settings = new TrayageSettings
+        {
+            Accounts = { new ProviderAccount { Id = AccountId, Provider = ProviderKind.Bitbucket, Connected = true } },
+        };
+        _settings.Load().Returns(settings);
+        _account = new ProviderAccountContext(ProviderKind.Bitbucket, AccountId, _settings, _secrets);
+
         // A stored refresh token makes the provider report IsConnected on construction.
-        _secrets.Contains(SecretKeys.BitbucketRefreshToken).Returns(true);
-        _secrets.Get(SecretKeys.BitbucketRefreshToken).Returns("rt");
+        _secrets.Contains(_account.RefreshTokenKey).Returns(true);
+        _secrets.Get(_account.RefreshTokenKey).Returns("rt");
     }
 
     private BitbucketProvider NewProvider(Func<HttpRequestMessage, HttpResponseMessage> route)
@@ -39,7 +50,7 @@ public sealed class BitbucketProviderListReposTests
         factory.CreateClient(Arg.Any<string>()).Returns(client);
 
         var options = Options.Create(new BitbucketOptions { Key = "k", Secret = "s" });
-        return new BitbucketProvider(options, factory, _secrets, _settings, NullLogger<BitbucketProvider>.Instance);
+        return new BitbucketProvider(options, _account, factory, _secrets, NullLogger<BitbucketProvider>.Instance);
     }
 
     [Fact]

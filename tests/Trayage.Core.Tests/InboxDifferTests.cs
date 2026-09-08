@@ -64,4 +64,19 @@ public sealed class InboxDifferTests
 
         Assert.Equal(2, _differ.FindNewOrUpdated(Array.Empty<InboxItem>(), current).Count);
     }
+    [Fact]
+    public void SameIdOnAnotherAccount_IsReportedAsNew()
+    {
+        // The second account's copy is genuinely new activity for that account, not a repeat.
+        var previous = new[] { TestData.Item("1", accountId: "work") };
+        var current = new[]
+        {
+            TestData.Item("1", accountId: "work"),
+            TestData.Item("1", accountId: "personal"),
+        };
+
+        var result = _differ.FindNewOrUpdated(previous, current);
+
+        Assert.Equal("personal", Assert.Single(result).AccountId);
+    }
 }

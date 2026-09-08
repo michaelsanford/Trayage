@@ -10,11 +10,14 @@
                 <ui:ControlsDictionary />
                 <ResourceDictionary Source="Themes/Brushes.xaml" />
                 <ResourceDictionary Source="Themes/BrandIcons.xaml" />
+                <ResourceDictionary Source="Themes/SettingsStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
             <local:InverseBooleanConverter x:Key="InverseBool" />
             <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
             <local:EmptyStringToCollapsedConverter x:Key="EmptyStringToCollapsed" />
+            <local:RepoSegmentConverter x:Key="RepoSegment" />
+            <local:GroupCollapsedConverter x:Key="GroupCollapsed" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

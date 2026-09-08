@@ -15,9 +15,9 @@
 
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="color-scheme" content="dark" />
-  <meta name="description" content="Trayage — a .NET 10 Windows tray app that unifies your GitHub and Bitbucket Cloud inbox and raises native toast notifications." />
+  <meta name="description" content="Trayage — a .NET 10 Windows tray app that unifies your GitHub, Bitbucket Cloud and GitLab inbox across as many accounts as you like, and raises native toast notifications." />
 
-  <title>Trayage — your GitHub &amp; Bitbucket inbox, in the tray</title>
+  <title>Trayage — your GitHub, Bitbucket &amp; GitLab inbox, in the tray</title>
 
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23161b23'/%3E%3Cg stroke-width='4.32' stroke-linecap='round'%3E%3Cline x1='6.4' y1='9.6' x2='26.88' y2='9.6' stroke='%23ffd587'/%3E%3Cline x1='6.4' y1='16' x2='20.48' y2='16' stroke='%235b97f7'/%3E%3Cline x1='6.4' y1='22.4' x2='14.72' y2='22.4' stroke='%235b97f7'/%3E%3C/g%3E%3C/svg%3E" />
 
@@ -80,12 +80,12 @@
         <div class="group-label">octocat/hello-world</div>
         <div class="item">
           <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v6a3 3 0 0 0 3 3h6"/></svg></div>
-          <div><div class="it-title">Add retry/backoff to the poller</div><div class="it-sub">Review requested · 4m ago</div></div>
+          <div><div class="it-title">Add retry/backoff to the poller</div><div class="it-sub">Review requested · Work · 4m ago</div></div>
           <div class="unread"></div>
         </div>
         <div class="item">
           <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
-          <div><div class="it-title">@you — can you take a look?</div><div class="it-sub">Mention · 22m ago</div></div>
+          <div><div class="it-title">@you — can you take a look?</div><div class="it-sub">Mention · Personal · 22m ago</div></div>
           <div class="unread"></div>
         </div>
 
@@ -139,14 +139,14 @@
           <p>OAuth tokens are encrypted at rest with Windows DPAPI — per-user, per-machine, never in plaintext.</p>
         </article>
         <article class="card reveal d2">
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
-          <h3>Fluent UI</h3>
-          <p>A clean Windows 11 look with light, dark, and system themes — built on WPF and WPF-UI.</p>
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <h3>Multiple accounts</h3>
+          <p>Work and personal GitHub side by side, or two Bitbucket workspaces. Each account keeps its own sign-in and its own watched repositories, pauses independently, and the inbox tells you which one an item came from.</p>
         </article>
         <article class="card reveal d3">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-          <h3>Tunable &amp; quiet</h3>
-          <p>Set the poll interval, group or hide read items, toggle each notification class, and start with Windows. The first poll never floods you.</p>
+          <h3>Fluent, tunable, quiet</h3>
+          <p>A clean Windows 11 look with light, dark, and system themes. Set the poll interval, group or hide read items, and toggle each notification class. The first poll never floods you.</p>
         </article>
       </div>
     </div>
@@ -157,8 +157,8 @@
     <div class="wrap">
       <div class="section-head">
         <div class="kicker">Connects to</div>
-        <h2>Three services, one inbox.</h2>
-        <p>Each provider authenticates the way it's meant to — you just click <em>Connect</em>.</p>
+        <h2>Three services, any number of accounts, one inbox.</h2>
+        <p>Each provider authenticates the way it's meant to — you just click <em>Connect</em>. Click it more than once to add another account.</p>
       </div>
       <div class="providers">
         <div class="provider reveal d1">
@@ -181,6 +181,7 @@
             <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Pull requests you authored</li>
             <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Review requests in watched repos</li>
             <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> All activity in watched repos</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Watched repos are picked per account</li>
           </ul>
         </div>
         <div class="provider reveal d3">

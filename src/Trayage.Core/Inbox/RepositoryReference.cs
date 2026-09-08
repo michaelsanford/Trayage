@@ -56,6 +56,26 @@ public static class RepositoryReference
         return $"{owner}/{repo}";
     }
 
+    /// <summary>
+    /// Splits a canonical "owner/repo" into its two halves for display. Callers also pass
+    /// labels that are not repository references at all — the inbox groups by recency bucket
+    /// ("Today", "Yesterday") when it isn't grouping by repository — and those have no slash,
+    /// so they come back with an empty owner and the whole string as the name. That lets a
+    /// caller render either shape without special-casing.
+    /// </summary>
+    public static (string Owner, string Name) Split(string? fullName)
+    {
+        if (string.IsNullOrEmpty(fullName))
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        var slash = fullName.IndexOf('/');
+        return slash < 0
+            ? (string.Empty, fullName)
+            : (fullName[..slash], fullName[(slash + 1)..]);
+    }
+
     private static string StripHost(string value)
     {
         var scheme = value.IndexOf("://", StringComparison.Ordinal);

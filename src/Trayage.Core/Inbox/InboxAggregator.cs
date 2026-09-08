@@ -16,7 +16,7 @@ public sealed class InboxAggregator
     {
         ArgumentNullException.ThrowIfNull(providerResults);
 
-        var byKey = new Dictionary<(ProviderKind, string), InboxItem>();
+        var byKey = new Dictionary<(ProviderKind, string, string), InboxItem>();
 
         foreach (var result in providerResults)
         {

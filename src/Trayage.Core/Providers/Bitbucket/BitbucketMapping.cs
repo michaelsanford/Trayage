@@ -6,7 +6,7 @@ namespace Trayage.Core.Providers.Bitbucket;
 /// <summary>Pure translation of Bitbucket pull requests into <see cref="InboxItem"/>s.</summary>
 public static class BitbucketMapping
 {
-    public static InboxItem ToInboxItem(BitbucketPullRequest pr, InboxItemKind kind, string repositoryFullName)
+    public static InboxItem ToInboxItem(BitbucketPullRequest pr, InboxItemKind kind, string repositoryFullName, string accountId)
     {
         var repo = pr.Destination?.Repository?.FullName ?? repositoryFullName;
         var webUrl = pr.Links?.Html?.Href ?? $"https://bitbucket.org/{repo}/pull-requests/{pr.Id}";
@@ -16,6 +16,7 @@ public static class BitbucketMapping
             // Stable across polls and unique per repo+PR.
             Id = $"pr:{repo}:{pr.Id}",
             Provider = ProviderKind.Bitbucket,
+            AccountId = accountId,
             Kind = kind,
             Title = pr.Title ?? $"Pull request #{pr.Id}",
             RepositoryFullName = repo,

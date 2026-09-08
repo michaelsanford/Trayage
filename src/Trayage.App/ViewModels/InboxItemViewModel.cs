@@ -1,3 +1,5 @@
+using Trayage.Core.Configuration;
+using Trayage.Core.Inbox;
 using Trayage.Core.Models;
 using Wpf.Ui.Controls;
 
@@ -6,18 +8,31 @@ namespace Trayage.App.ViewModels;
 /// <summary>Read-only presentation wrapper around an <see cref="InboxItem"/> for the flyout list.</summary>
 public sealed class InboxItemViewModel
 {
-    private readonly bool _includeRepoInSubtitle;
+    private readonly InboxGrouping _grouping;
 
     /// <param name="item">The inbox item.</param>
-    /// <param name="includeRepoInSubtitle">
-    /// True when the list is flat (sequential), so the repository name is shown in the
-    /// subtitle; false when grouped by repository (the group header already shows it).
+    /// <param name="grouping">
+    /// How the list is grouped, which decides how much of the repository name the subtitle
+    /// has to repeat: none of it when every group is one repository, the short name when the
+    /// group is only the owner, and the full "owner/repo" when the list isn't grouped by
+    /// repository at all.
     /// </param>
-    public InboxItemViewModel(InboxItem item, bool includeRepoInSubtitle = false)
+    /// <param name="accountLabel">
+    /// Which account this item arrived through, shown only when more than one account is
+    /// connected to the same provider; null otherwise, so single-account users see no change.
+    /// </param>
+    public InboxItemViewModel(
+        InboxItem item,
+        InboxGrouping grouping = InboxGrouping.Repository,
+        string? accountLabel = null)
     {
         Item = item;
-        _includeRepoInSubtitle = includeRepoInSubtitle;
+        _grouping = grouping;
+        AccountLabel = accountLabel;
     }
+
+    /// <summary>The account this item came from, or null when naming it wouldn't disambiguate.</summary>
+    public string? AccountLabel { get; }
 
     public InboxItem Item { get; }
 
@@ -26,6 +41,12 @@ public sealed class InboxItemViewModel
     public string Title => Item.Title;
 
     public string RepositoryFullName => Item.RepositoryFullName;
+
+    /// <summary>The owner/organisation half of <see cref="RepositoryFullName"/>; the owner-grouping key.</summary>
+    public string RepositoryOwner => RepositoryReference.Split(Item.RepositoryFullName).Owner;
+
+    /// <summary>The repository half of <see cref="RepositoryFullName"/>, without its owner.</summary>
+    public string RepositoryShortName => RepositoryReference.Split(Item.RepositoryFullName).Name;
 
     public string WebUrl => Item.WebUrl;
 
@@ -81,9 +102,38 @@ public sealed class InboxItemViewModel
 
     public string RelativeTime => FormatRelative(Item.UpdatedAt);
 
-    public string Subtitle => _includeRepoInSubtitle
-        ? $"{RepositoryFullName} · {KindLabel} · {RelativeTime}"
-        : $"{KindLabel} · {RelativeTime}";
+    /// <summary>
+    /// The row's second line: what the item is, not when it moved. <see cref="RelativeTime"/>
+    /// is rendered separately, right-aligned on the title line, so it stays out of here.
+    /// </summary>
+    public string Subtitle
+    {
+        get
+        {
+            var parts = new List<string>(3);
+
+            // Say as much of the repository as the group header leaves unsaid.
+            var repo = _grouping switch
+            {
+                InboxGrouping.Repository => null,
+                InboxGrouping.Owner => RepositoryShortName,
+                _ => RepositoryFullName,
+            };
+
+            if (repo is { Length: > 0 })
+            {
+                parts.Add(repo);
+            }
+
+            parts.Add(KindLabel);
+            if (AccountLabel is { Length: > 0 } account)
+            {
+                parts.Add(account);
+            }
+
+            return string.Join(" · ", parts);
+        }
+    }
 
     private static string FormatRelative(DateTimeOffset when)
     {

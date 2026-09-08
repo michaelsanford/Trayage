@@ -42,4 +42,26 @@ public sealed class InboxAggregatorTests
 
         Assert.Equal(2, merged.Count);
     }
+    [Fact]
+    public void Merge_KeepsItemsFromDifferentAccountsSharingAnId()
+    {
+        // Two GitHub accounts can legitimately see the same notification thread id. Before the
+        // key carried the account, one of them was silently dropped.
+        var work = TestData.Item("1", accountId: "work");
+        var personal = TestData.Item("1", accountId: "personal");
+
+        var merged = _aggregator.Merge(new[] { new[] { work }, new[] { personal } });
+
+        Assert.Equal(2, merged.Count);
+        Assert.Equal(new[] { "personal", "work" }, merged.Select(i => i.AccountId).Order());
+    }
+
+    [Fact]
+    public void Merge_StillDeduplicatesWithinOneAccount()
+    {
+        var first = TestData.Item("1", accountId: "work");
+        var second = TestData.Item("1", accountId: "work");
+
+        Assert.Single(_aggregator.Merge(new[] { new[] { first }, new[] { second } }));
+    }
 }

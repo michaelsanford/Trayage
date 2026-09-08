@@ -19,31 +19,200 @@
         WindowStartupLocation="Manual">
 
     <Window.Resources>
-        <!-- Flat, rounded row that highlights subtly on hover (mirrors the docs .item). -->
+        <!-- Flat, rounded row that highlights subtly on hover (mirrors the docs .item).
+
+             This button is the row's *only* interactive chrome — the ListViewItem container it
+             sits in is templated down to a bare ContentPresenter (see ItemContainerStyle), so
+             hover, pressed and keyboard-focus states all have to live here.
+
+             FocusVisualStyle is nulled because WPF-UI overrides SystemParameters.FocusVisualStyleKey
+             with an accent-stroked rectangle drawn *outside* the row, which collided with the
+             scrollbar. The focus ring below is an overlay border instead of a thickness on "bd",
+             so showing it neither shifts the content by a pixel nor grows the row. -->
         <Style x:Key="RowButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="10,8" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="10"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Stretch" />
-                        </Border>
+                        <Grid>
+                            <Border x:Name="bd"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="10"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Stretch" />
+                            </Border>
+                            <Border x:Name="focusRing"
+                                    CornerRadius="10"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
+                                    IsHitTestVisible="False"
+                                    Visibility="Collapsed" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="focusRing" Property="Visibility" Value="Visible" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Group header: a disclosure control, so it reuses RowButton's flat treatment —
+             including the hand cursor, since the whole strip toggles the group — with tighter
+             padding and the vertical rhythm that used to sit on the header template. -->
+        <Style x:Key="GroupHeaderButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="Margin" Value="0,10,10,0" />
+        </Style>
+
+        <!-- Small icon action nested inside a row or group header. Square and quiet: it borrows
+             RowButton's flat chrome but at icon size, and reveals itself only on hover or
+             keyboard focus so the resting row stays uncluttered. The space it occupies is
+             reserved by its column either way, so nothing shifts when it appears. -->
+        <Style x:Key="RowActionButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <!-- Only meaningful while the item is unread; the ancestor is the row or header
+                     Button this sits inside. -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsUnread}" Value="True" />
+                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsUnread}" Value="True" />
+                        <Condition Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- As above, for a group header, where there's no IsUnread to gate on. -->
+        <Style x:Key="GroupActionButton" TargetType="Button" BasedOn="{StaticResource RowActionButton}">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- The group name is a plain string from the collection view, and its shape depends on
+             the grouping: "owner/repo", a bare owner, or a recency bucket ("Today"). Two columns
+             rather than inline Runs so the owner can be de-emphasised and the name trimmed with
+             no XAML-whitespace gap between them; RepoSegment yields an empty owner for a label
+             with no slash, which then renders as a single word. -->
+        <DataTemplate x:Key="InboxGroupHeaderTemplate" DataType="{x:Type CollectionViewGroup}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="24" />
+                </Grid.ColumnDefinitions>
+
+                <ui:SymbolIcon Grid.Column="0"
+                               FontSize="12"
+                               Margin="0,0,4,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                    <ui:SymbolIcon.Symbol>
+                        <MultiBinding Converter="{StaticResource GroupCollapsed}" ConverterParameter="Symbol">
+                            <Binding Path="Name" />
+                            <Binding Path="DataContext.Grouping" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                            <Binding Path="DataContext.CollapsedGroups" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                            <Binding Path="DataContext.CollapsedGroups.Count" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                        </MultiBinding>
+                    </ui:SymbolIcon.Symbol>
+                </ui:SymbolIcon>
+
+                <!-- Brand mark, shown only when the header is an owner: the same org name can
+                     exist on two providers. It reads the group's first item, so an owner that
+                     genuinely spans providers shows just one of them — the grouping pools them
+                     by name, and splitting owners per provider isn't what the setting promises. -->
+                <Path Grid.Column="1"
+                      Stretch="Uniform" Width="10" Height="10"
+                      Margin="0,0,5,0"
+                      VerticalAlignment="Center">
+                    <Path.Style>
+                        <Style TargetType="Path">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Setter Property="Data" Value="{StaticResource GitHubMarkGeometry}" />
+                            <Setter Property="Fill" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.Grouping, RelativeSource={RelativeSource AncestorType=ListView}}" Value="Owner">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Items[0].Provider}" Value="Bitbucket">
+                                    <Setter Property="Data" Value="{StaticResource BitbucketMarkGeometry}" />
+                                    <Setter Property="Fill" Value="{StaticResource BitbucketBlueBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Items[0].Provider}" Value="GitLab">
+                                    <Setter Property="Data" Value="{StaticResource GitLabMarkGeometry}" />
+                                    <Setter Property="Fill" Value="{StaticResource GitLabOrangeBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Path.Style>
+                </Path>
+
+                <TextBlock Grid.Column="2"
+                           Text="{Binding Name, Converter={StaticResource RepoSegment}, ConverterParameter=Owner}"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                <TextBlock Grid.Column="3"
+                           Text="{Binding Name, Converter={StaticResource RepoSegment}}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <TextBlock Grid.Column="4"
+                           Text="{Binding ItemCount}"
+                           FontSize="12"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+                <Button Grid.Column="5"
+                        Style="{StaticResource GroupActionButton}"
+                        Margin="4,0,0,0"
+                        ToolTip="Mark this group read"
+                        AutomationProperties.Name="Mark this group read"
+                        Command="{Binding DataContext.MarkGroupReadCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                        CommandParameter="{Binding Name}">
+                    <ui:SymbolIcon Symbol="MailReadMultiple24" FontSize="14" />
+                </Button>
+            </Grid>
+        </DataTemplate>
     </Window.Resources>
 
     <Border Background="{DynamicResource ApplicationBackgroundBrush}"
@@ -67,6 +236,13 @@
                 <StackPanel Orientation="Horizontal"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center">
+                    <ui:Button Appearance="Secondary"
+                               Icon="{ui:SymbolIcon MailReadMultiple24}"
+                               ToolTip="Mark everything read"
+                               AutomationProperties.Name="Mark everything read"
+                               Command="{Binding MarkAllReadCommand}"
+                               IsEnabled="{Binding HasUnread}"
+                               Margin="0,0,8,0" />
                     <ui:Button Appearance="Secondary"
                                Icon="{ui:SymbolIcon ArrowSync24}"
                                ToolTip="Refresh"
@@ -97,32 +273,84 @@
                            HorizontalAlignment="Center" />
             </StackPanel>
 
+            <!-- TabNavigation=Continue because the interactive elements here are the group
+                 header and row Buttons, not the item containers: a ListView is otherwise a
+                 single tab stop that hands focus to a container and navigates with the arrow
+                 keys, and these containers are deliberately not focusable, which would leave
+                 every row unreachable from the keyboard. -->
             <ListView Grid.Row="1"
                       ItemsSource="{Binding ItemsView}"
                       Background="Transparent"
                       BorderThickness="0"
+                      IsTabStop="False"
+                      KeyboardNavigation.TabNavigation="Continue"
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                       VirtualizingPanel.IsVirtualizingWhenGrouping="True"
                       VirtualizingPanel.ScrollUnit="Pixel">
+                <!-- Groups are collapsible, so the container owns both the header and the body
+                     (see GroupHeaderButton / InboxGroupHeaderTemplate in Window.Resources).
+                     Collapsing hides the ItemsPresenter rather than swapping templates, which
+                     keeps grouped virtualization intact. -->
                 <ListView.GroupStyle>
                     <GroupStyle>
-                        <GroupStyle.HeaderTemplate>
-                            <DataTemplate DataType="{x:Type CollectionViewGroup}">
-                                <TextBlock Text="{Binding Name}"
-                                           FontFamily="Cascadia Mono, Consolas, monospace"
-                                           FontSize="11"
-                                           FontWeight="SemiBold"
-                                           Margin="6,12,0,4"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                            </DataTemplate>
-                        </GroupStyle.HeaderTemplate>
+                        <GroupStyle.ContainerStyle>
+                            <Style TargetType="GroupItem">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="GroupItem">
+                                            <StackPanel>
+                                                <Button Style="{StaticResource GroupHeaderButton}"
+                                                        Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                        CommandParameter="{Binding Name}"
+                                                        ContentTemplate="{StaticResource InboxGroupHeaderTemplate}"
+                                                        Content="{Binding}" />
+                                                <ItemsPresenter>
+                                                    <ItemsPresenter.Visibility>
+                                                        <MultiBinding Converter="{StaticResource GroupCollapsed}">
+                                                            <Binding Path="Name" />
+                                                            <Binding Path="DataContext.Grouping" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                                                            <Binding Path="DataContext.CollapsedGroups" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                                                            <Binding Path="DataContext.CollapsedGroups.Count" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                                                        </MultiBinding>
+                                                    </ItemsPresenter.Visibility>
+                                                </ItemsPresenter>
+                                            </StackPanel>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </GroupStyle.ContainerStyle>
                     </GroupStyle>
                 </ListView.GroupStyle>
+                <!-- The container is deliberately templated down to a bare ContentPresenter.
+                     Each row is already a Button that owns the click command, so the container's
+                     selection and hover chrome is redundant — and because a local style on a
+                     themed control replaces the implicit one wholesale (ControlTemplate
+                     included), leaving the Template unset dropped WPF-UI's Fluent ListViewItem
+                     for the stock Aero2 one, whose IsSelected trigger painted a full-width
+                     SystemColors.Highlight box that ran under the scrollbar.
+
+                     So do NOT "fix" this with BasedOn: that would restore a second hover fill
+                     underneath the Button's own. All row visuals belong to RowButton. The right
+                     margin is the scrollbar gutter, keeping hover fill and focus ring clear of
+                     the bar; the group header above carries the same one. -->
                 <ListView.ItemContainerStyle>
                     <Style TargetType="ListViewItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                         <Setter Property="Padding" Value="0" />
-                        <Setter Property="Margin" Value="0,1" />
+                        <Setter Property="Margin" Value="0,1,10,1" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                        <!-- Keyboard focus belongs to the inner Button, not the container. -->
+                        <Setter Property="Focusable" Value="False" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListViewItem">
+                                    <ContentPresenter HorizontalAlignment="Stretch" />
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
                     </Style>
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
@@ -135,6 +363,10 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <!-- Reserved rather than Auto, so revealing the action on
+                                         hover doesn't reflow the row under the pointer. -->
+                                    <ColumnDefinition Width="26" />
                                 </Grid.ColumnDefinitions>
 
                                 <!-- Kind + provider badge: a filled shape coloured by provider
@@ -203,9 +435,19 @@
                                     </Border>
                                 </Grid>
 
-                                <!-- Title + subtitle -->
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <!-- Title + subtitle. Aligned to the top, not centred, so a
+                                     title that wraps to a second line stays level with the badge. -->
+                                <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                                    <!-- Wrapped and clamped to two lines (MaxHeight = 2 × LineHeight)
+                                         rather than trimmed to one: at 14px most titles need the
+                                         second line to read in full at this flyout width, and the
+                                         trimming still ellipsises whatever doesn't fit. -->
                                     <TextBlock Text="{Binding Title}"
+                                               FontSize="14"
+                                               LineHeight="19"
+                                               LineStackingStrategy="BlockLineHeight"
+                                               TextWrapping="Wrap"
+                                               MaxHeight="38"
                                                TextTrimming="CharacterEllipsis">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
@@ -222,23 +464,49 @@
                                         </TextBlock.Style>
                                     </TextBlock>
                                     <TextBlock Text="{Binding Subtitle}"
-                                               FontSize="11"
+                                               FontSize="12"
                                                Margin="0,2,0,0"
-                                               FontFamily="Cascadia Mono, Consolas, monospace"
+                                               TextTrimming="CharacterEllipsis"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                 </StackPanel>
 
+                                <!-- Relative time, right-aligned on the title line (mail-client
+                                     style) instead of trailing the subtitle, which keeps the
+                                     subtitle to what the item *is* rather than when it moved. -->
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding RelativeTime}"
+                                           FontSize="12"
+                                           Margin="8,0,0,0"
+                                           VerticalAlignment="Top"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
                                 <!-- Unread dot -->
-                                <Ellipse Grid.Column="2"
+                                <!-- Top-aligned so it sits beside the relative time on the
+                                     title line, rather than drifting down the middle of a row
+                                     whose height now depends on how far the title wraps. -->
+                                <Ellipse Grid.Column="3"
                                          Width="9" Height="9"
                                          Fill="{StaticResource TrayageUnreadBrush}"
-                                         VerticalAlignment="Center"
-                                         Margin="10,0,2,0"
+                                         VerticalAlignment="Top"
+                                         Margin="8,5,2,0"
                                          Visibility="{Binding IsUnread, Converter={StaticResource BoolToVisibility}}">
                                     <Ellipse.Effect>
                                         <DropShadowEffect Color="#E5484D" BlurRadius="10" ShadowDepth="0" Opacity="0.7" />
                                     </Ellipse.Effect>
                                 </Ellipse>
+
+                                <!-- Nested inside the row Button. ButtonBase handles the mouse
+                                     events, so clicking here marks read without also firing the
+                                     row's open command. -->
+                                <Button Grid.Column="4"
+                                        Style="{StaticResource RowActionButton}"
+                                        VerticalAlignment="Top"
+                                        ToolTip="Mark as read"
+                                        AutomationProperties.Name="Mark as read"
+                                        Command="{Binding DataContext.MarkReadCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                        CommandParameter="{Binding}">
+                                    <ui:SymbolIcon Symbol="MailRead16" FontSize="14" />
+                                </Button>
                             </Grid>
                         </Button>
                     </DataTemplate>
@@ -259,7 +527,7 @@
             <TextBlock Grid.Row="2"
                        Text="{Binding StatusText}"
                        Margin="4,12,0,0"
-                       FontSize="11"
+                       FontSize="12"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
         </Grid>
     </Border>

@@ -1,9 +1,9 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
 using Trayage.Core.Models;
 using Trayage.Core.Security;
@@ -11,7 +11,7 @@ using Trayage.Core.Security;
 namespace Trayage.Core.Providers.GitLab;
 
 /// <summary>
-/// GitLab.com inbox provider. GitLab has a centralized, server-side to-do inbox
+/// GitLab inbox provider for a single account. GitLab has a centralized, server-side to-do inbox
 /// (<c>GET /api/v4/todos</c>), so — like GitHub and unlike Bitbucket — there is no in-app
 /// repository filtering: each pending to-do becomes an <see cref="InboxItem"/>.
 ///
@@ -25,9 +25,9 @@ public sealed class GitLabProvider : IInboxProvider
     private const int MaxPagesPerQuery = 5;
 
     private readonly GitLabOptions _options;
+    private readonly ProviderAccountContext _account;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ISecretStore _secrets;
-    private readonly ISettingsStore _settings;
     private readonly ILogger<GitLabProvider> _logger;
 
     private string? _accessToken;
@@ -35,15 +35,15 @@ public sealed class GitLabProvider : IInboxProvider
 
     public GitLabProvider(
         IOptions<GitLabOptions> options,
+        ProviderAccountContext account,
         IHttpClientFactory httpClientFactory,
         ISecretStore secrets,
-        ISettingsStore settings,
         ILogger<GitLabProvider> logger)
     {
         _options = options.Value;
+        _account = account;
         _httpClientFactory = httpClientFactory;
         _secrets = secrets;
-        _settings = settings;
         _logger = logger;
 
         RestoreSession();
@@ -51,17 +51,24 @@ public sealed class GitLabProvider : IInboxProvider
 
     public ProviderKind Provider => ProviderKind.GitLab;
 
+    public string AccountId => _account.AccountId;
+
+    public string DisplayLabel => _account.QualifiedLabel;
+
     public bool IsConnected { get; private set; }
 
     public string? AccountLogin { get; private set; }
 
     public TimeSpan? SuggestedPollInterval => null;
 
-    private string DeviceAuthEndpoint => $"{_options.BaseUrl.TrimEnd('/')}/oauth/authorize_device";
+    /// <summary>The account's own instance when set, else the app-wide default (gitlab.com).</summary>
+    private string InstanceUrl => (_account.BaseUrl is { Length: > 0 } url ? url : _options.BaseUrl).TrimEnd('/');
 
-    private string TokenEndpoint => $"{_options.BaseUrl.TrimEnd('/')}/oauth/token";
+    private string DeviceAuthEndpoint => $"{InstanceUrl}/oauth/authorize_device";
 
-    private string ApiBase => $"{_options.BaseUrl.TrimEnd('/')}/api/v4";
+    private string TokenEndpoint => $"{InstanceUrl}/oauth/token";
+
+    private string ApiBase => $"{InstanceUrl}/api/v4";
 
     /// <summary>
     /// Runs the OAuth device flow. <paramref name="onPromptReady"/> is invoked with the user
@@ -101,8 +108,7 @@ public sealed class GitLabProvider : IInboxProvider
 
     public void Disconnect()
     {
-        _secrets.Remove(SecretKeys.GitLabAccessToken);
-        _secrets.Remove(SecretKeys.GitLabRefreshToken);
+        _account.PurgeSecrets();
         _accessToken = null;
         _accessExpiresUtc = DateTimeOffset.MinValue;
         IsConnected = false;
@@ -140,7 +146,7 @@ public sealed class GitLabProvider : IInboxProvider
 
             foreach (var todo in todos)
             {
-                items.Add(GitLabMapping.ToInboxItem(todo));
+                items.Add(GitLabMapping.ToInboxItem(todo, AccountId));
             }
 
             // GitLab paginates via the X-Next-Page header (empty when there are no more pages).
@@ -251,7 +257,7 @@ public sealed class GitLabProvider : IInboxProvider
             return _accessToken;
         }
 
-        var refreshToken = _secrets.Get(SecretKeys.GitLabRefreshToken);
+        var refreshToken = _secrets.Get(_account.RefreshTokenKey);
         if (refreshToken is null)
         {
             return null;
@@ -281,6 +287,57 @@ public sealed class GitLabProvider : IInboxProvider
             _logger.LogWarning(ex, "Failed to refresh the GitLab access token.");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Marks the to-do done. Note this <em>removes</em> the item from the inbox rather than
+    /// dimming it: Trayage reads the pending to-do list, and a done to-do is no longer pending,
+    /// so the row disappears on the next poll. That's GitLab's model, not a choice here.
+    /// </summary>
+    public async Task<MarkAsReadOutcome> TryMarkAsReadAsync(InboxItem item, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        if (!IsConnected || !TryParseTodoId(item.Id, out var todoId))
+        {
+            return MarkAsReadOutcome.NotSupported;
+        }
+
+        var url = $"{ApiBase}/todos/{todoId}/mark_as_done";
+        using var response = await SendWithAuthAsync(
+            () => new HttpRequestMessage(HttpMethod.Post, url), cancellationToken).ConfigureAwait(false);
+
+        if (response is null)
+        {
+            return MarkAsReadOutcome.NotSupported;
+        }
+
+        // An account connected before Trayage asked for the write scope holds a read-only token,
+        // which GitLab rejects with 403. Surfacing that is the caller's job; the local mark still
+        // applies, so the feature degrades rather than breaking.
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            _logger.LogInformation("GitLab refused a to-do write; the account's token lacks the api scope.");
+            return MarkAsReadOutcome.NeedsReauthorization;
+        }
+
+        // 404 means the to-do is already done or gone — the desired state either way.
+        if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return MarkAsReadOutcome.Propagated;
+        }
+
+        _logger.LogWarning("GitLab returned {Status} marking a to-do done.", (int)response.StatusCode);
+        return MarkAsReadOutcome.NotSupported;
+    }
+
+    /// <summary>Recovers the numeric to-do id from the "todo:123" form GitLabMapping builds.</summary>
+    private static bool TryParseTodoId(string id, out long todoId)
+    {
+        const string prefix = "todo:";
+        todoId = 0;
+        return id.StartsWith(prefix, StringComparison.Ordinal) &&
+               long.TryParse(id.AsSpan(prefix.Length), CultureInfo.InvariantCulture, out todoId);
     }
 
     /// <summary>Sends an authenticated request, refreshing the access token once on 401.</summary>
@@ -335,29 +392,24 @@ public sealed class GitLabProvider : IInboxProvider
 
         if (!string.IsNullOrEmpty(token.AccessToken))
         {
-            _secrets.Set(SecretKeys.GitLabAccessToken, token.AccessToken);
+            _secrets.Set(_account.AccessTokenKey, token.AccessToken);
         }
 
         if (!string.IsNullOrEmpty(token.RefreshToken))
         {
-            _secrets.Set(SecretKeys.GitLabRefreshToken, token.RefreshToken);
+            _secrets.Set(_account.RefreshTokenKey, token.RefreshToken);
         }
     }
 
     private void RestoreSession()
     {
-        if (_secrets.Contains(SecretKeys.GitLabRefreshToken))
+        if (_secrets.Contains(_account.RefreshTokenKey))
         {
             IsConnected = true;
-            AccountLogin = _settings.Load().GitLab.AccountLogin;
+            AccountLogin = _account.AccountLogin;
         }
     }
 
-    private void PersistConnectionState(bool connected, string? login)
-    {
-        var settings = _settings.Load();
-        settings.GitLab.Connected = connected;
-        settings.GitLab.AccountLogin = login;
-        _settings.Save(settings);
-    }
+    private void PersistConnectionState(bool connected, string? login) =>
+        _account.PersistConnection(connected, login);
 }

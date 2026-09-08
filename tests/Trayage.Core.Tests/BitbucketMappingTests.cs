@@ -17,7 +17,7 @@ public sealed class BitbucketMappingTests
             Destination = new BitbucketPullRequestEndpoint { Repository = new BitbucketRepository { FullName = "acme/widgets" } },
         };
 
-        var item = BitbucketMapping.ToInboxItem(pr, InboxItemKind.ReviewRequest, "acme/widgets");
+        var item = BitbucketMapping.ToInboxItem(pr, InboxItemKind.ReviewRequest, "acme/widgets", "acct1");
 
         Assert.Equal("pr:acme/widgets:42", item.Id);
         Assert.Equal(ProviderKind.Bitbucket, item.Provider);
@@ -33,7 +33,7 @@ public sealed class BitbucketMappingTests
     {
         var pr = new BitbucketPullRequest { Id = 7, Title = null, Links = null, Destination = null };
 
-        var item = BitbucketMapping.ToInboxItem(pr, InboxItemKind.RepoActivity, "acme/widgets");
+        var item = BitbucketMapping.ToInboxItem(pr, InboxItemKind.RepoActivity, "acme/widgets", "acct1");
 
         Assert.Equal("acme/widgets", item.RepositoryFullName);
         Assert.Equal("https://bitbucket.org/acme/widgets/pull-requests/7", item.WebUrl);

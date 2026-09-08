@@ -20,7 +20,7 @@ public sealed class InboxDiffer
         ArgumentNullException.ThrowIfNull(previous);
         ArgumentNullException.ThrowIfNull(current);
 
-        var previousByKey = new Dictionary<(ProviderKind, string), DateTimeOffset>();
+        var previousByKey = new Dictionary<(ProviderKind, string, string), DateTimeOffset>();
         foreach (var item in previous)
         {
             // Keep the latest timestamp if the previous snapshot ever held duplicates.

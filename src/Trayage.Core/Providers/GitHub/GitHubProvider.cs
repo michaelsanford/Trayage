@@ -1,8 +1,8 @@
 using System.Globalization;
+using System.Net;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Octokit;
-using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
 using Trayage.Core.Models;
 using Trayage.Core.Security;
@@ -10,29 +10,29 @@ using Trayage.Core.Security;
 namespace Trayage.Core.Providers.GitHub;
 
 /// <summary>
-/// GitHub inbox provider. Authenticates with the OAuth device flow and reads the
-/// authenticated user's notification inbox, translating each thread into an
-/// <see cref="InboxItem"/>.
+/// GitHub inbox provider for a single account. Authenticates with the OAuth device flow and
+/// reads the authenticated user's notification inbox, translating each thread into an
+/// <see cref="InboxItem"/>. One instance exists per connected GitHub account.
 /// </summary>
 public sealed class GitHubProvider : IInboxProvider
 {
     private static readonly ProductHeaderValue Product = new("Trayage");
 
     private readonly GitHubOptions _options;
+    private readonly ProviderAccountContext _account;
     private readonly ISecretStore _secrets;
-    private readonly ISettingsStore _settings;
     private readonly ILogger<GitHubProvider> _logger;
     private readonly GitHubClient _client;
 
     public GitHubProvider(
         IOptions<GitHubOptions> options,
+        ProviderAccountContext account,
         ISecretStore secrets,
-        ISettingsStore settings,
         ILogger<GitHubProvider> logger)
     {
         _options = options.Value;
+        _account = account;
         _secrets = secrets;
-        _settings = settings;
         _logger = logger;
         _client = new GitHubClient(Product);
 
@@ -40,6 +40,10 @@ public sealed class GitHubProvider : IInboxProvider
     }
 
     public ProviderKind Provider => ProviderKind.GitHub;
+
+    public string AccountId => _account.AccountId;
+
+    public string DisplayLabel => _account.QualifiedLabel;
 
     public bool IsConnected { get; private set; }
 
@@ -82,7 +86,7 @@ public sealed class GitHubProvider : IInboxProvider
             throw new InvalidOperationException("GitHub did not return an access token.");
         }
 
-        _secrets.Set(SecretKeys.GitHubAccessToken, token.AccessToken);
+        _secrets.Set(_account.AccessTokenKey, token.AccessToken);
         _client.Credentials = new Credentials(token.AccessToken);
 
         var user = await _client.User.Current().ConfigureAwait(false);
@@ -96,7 +100,7 @@ public sealed class GitHubProvider : IInboxProvider
 
     public void Disconnect()
     {
-        _secrets.Remove(SecretKeys.GitHubAccessToken);
+        _account.PurgeSecrets();
         _client.Credentials = Credentials.Anonymous;
         IsConnected = false;
         AccountLogin = null;
@@ -127,13 +131,48 @@ public sealed class GitHubProvider : IInboxProvider
         var items = new List<InboxItem>(notifications.Count);
         foreach (var n in notifications)
         {
-            items.Add(Map(n));
+            items.Add(Map(n, AccountId));
         }
 
         return items;
     }
 
-    private static InboxItem Map(Notification n)
+    /// <summary>
+    /// Marks the notification thread read on GitHub. <see cref="InboxItem.Id"/> is the raw thread
+    /// id (see <see cref="Map"/>), and the <c>notifications</c> scope Trayage already requests
+    /// covers this write, so no re-consent is involved.
+    ///
+    /// This goes through the raw connection rather than
+    /// <c>Activity.Notifications.MarkAsRead(int)</c>: that overload takes an <see cref="int"/>,
+    /// and current GitHub thread ids are around eleven digits, so they overflow it. Keeping the
+    /// id as the string GitHub gave us avoids the conversion entirely.
+    /// </summary>
+    public async Task<MarkAsReadOutcome> TryMarkAsReadAsync(InboxItem item, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        if (!IsConnected)
+        {
+            return MarkAsReadOutcome.NotSupported;
+        }
+
+        var status = await _client.Connection
+            .Patch(new Uri($"notifications/threads/{Uri.EscapeDataString(item.Id)}", UriKind.Relative))
+            .ConfigureAwait(false);
+
+        // 403 would mean the token predates the notifications scope; everything else non-2xx is
+        // transient and reported by the caller.
+        if (status == HttpStatusCode.Forbidden)
+        {
+            _logger.LogInformation("GitHub refused a notification write; the account's token lacks the notifications scope.");
+            return MarkAsReadOutcome.NeedsReauthorization;
+        }
+
+        _logger.LogDebug("Marked GitHub thread read ({Status}).", (int)status);
+        return MarkAsReadOutcome.Propagated;
+    }
+
+    private static InboxItem Map(Notification n, string accountId)
     {
         var repoHtmlUrl = n.Repository?.HtmlUrl ?? "https://github.com";
         var webUrl = GitHubWebUrl.Build(n.Subject?.Url, n.Subject?.Type, repoHtmlUrl);
@@ -142,6 +181,7 @@ public sealed class GitHubProvider : IInboxProvider
         {
             Id = n.Id,
             Provider = ProviderKind.GitHub,
+            AccountId = accountId,
             Kind = GitHubReasonMapper.ToKind(n.Reason),
             Title = n.Subject?.Title ?? "(no title)",
             RepositoryFullName = n.Repository?.FullName ?? "unknown/unknown",
@@ -160,7 +200,7 @@ public sealed class GitHubProvider : IInboxProvider
 
     private void RestoreSession()
     {
-        var token = _secrets.Get(SecretKeys.GitHubAccessToken);
+        var token = _secrets.Get(_account.AccessTokenKey);
         if (string.IsNullOrEmpty(token))
         {
             return;
@@ -168,14 +208,9 @@ public sealed class GitHubProvider : IInboxProvider
 
         _client.Credentials = new Credentials(token);
         IsConnected = true;
-        AccountLogin = _settings.Load().GitHub.AccountLogin;
+        AccountLogin = _account.AccountLogin;
     }
 
-    private void PersistConnectionState(bool connected, string? login)
-    {
-        var settings = _settings.Load();
-        settings.GitHub.Connected = connected;
-        settings.GitHub.AccountLogin = login;
-        _settings.Save(settings);
-    }
+    private void PersistConnectionState(bool connected, string? login) =>
+        _account.PersistConnection(connected, login);
 }

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
 using Trayage.Core.Models;
+using Trayage.Core.Providers;
 
 namespace Trayage.Core.Notifications;
 
@@ -17,7 +18,7 @@ public sealed class InboxPollingService(
     NotificationRuleEngine ruleEngine,
     IToastNotifier notifier,
     ISettingsStore settings,
-    IEnumerable<IInboxProvider> providers,
+    ProviderRegistry registry,
     ILogger<InboxPollingService> logger) : BackgroundService
 {
     private static readonly TimeSpan MinimumInterval = TimeSpan.FromSeconds(30);
@@ -29,9 +30,11 @@ public sealed class InboxPollingService(
     private IReadOnlyList<InboxItem> _previous = Array.Empty<InboxItem>();
     private bool _baselineEstablished;
 
-    // Providers currently in a failing state, so we toast only on healthy→failing and
-    // failing→healthy transitions rather than every cycle.
-    private readonly HashSet<ProviderKind> _failingProviders = new();
+    // Accounts currently in a failing state, so we toast only on healthy→failing and
+    // failing→healthy transitions rather than every cycle. Keyed by account, not provider, so
+    // one GitHub account recovering doesn't clear another's alert. The label is kept alongside
+    // so a recovery can still be named after the account row is gone.
+    private readonly Dictionary<string, string> _failingAccounts = new(StringComparer.Ordinal);
     private int _consecutiveCycleFailures;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -79,7 +82,7 @@ public sealed class InboxPollingService(
 
         // Surface provider health on every cycle (including the silent baseline cycle) so a
         // provider that's broken from the start still gets reported.
-        SurfaceProviderHealth(result.FailedProviders);
+        SurfaceProviderHealth(result.Failures);
 
         if (!_baselineEstablished)
         {
@@ -95,7 +98,7 @@ public sealed class InboxPollingService(
             var toNotify = ruleEngine.SelectNotifiable(
                 newItems,
                 appSettings.Notifications,
-                appSettings.WatchedRepositories,
+                appSettings.AllWatchedRepositories,
                 DateTimeOffset.UtcNow,
                 InboxRecency.WindowFor(appSettings));
             foreach (var item in toNotify)
@@ -112,28 +115,27 @@ public sealed class InboxPollingService(
         _previous = current;
     }
 
-    // Toasts once when a provider starts failing and once when it recovers, tracking state in
-    // _failingProviders so a persistently-broken provider doesn't notify every cycle.
-    private void SurfaceProviderHealth(IReadOnlyList<ProviderKind> failedThisCycle)
+    // Toasts once when an account starts failing and once when it recovers, tracking state in
+    // _failingAccounts so a persistently-broken account doesn't notify every cycle.
+    private void SurfaceProviderHealth(IReadOnlyList<ProviderFailure> failedThisCycle)
     {
-        foreach (var provider in failedThisCycle)
+        foreach (var failure in failedThisCycle)
         {
-            if (_failingProviders.Add(provider))
+            if (_failingAccounts.TryAdd(failure.AccountId, failure.Label))
             {
-                var name = provider.DisplayName();
                 notifier.ShowMessage(
-                    $"{name} sync failed",
-                    $"Trayage couldn't reach {name}, so you may be missing notifications. Try reconnecting it in Settings.");
+                    $"{failure.Label} sync failed",
+                    $"Trayage couldn't reach {failure.Label}, so you may be missing notifications. Try reconnecting it in Settings.");
             }
         }
 
         // Anything previously failing that didn't fail this cycle has recovered.
-        var recovered = _failingProviders.Where(p => !failedThisCycle.Contains(p)).ToList();
-        foreach (var provider in recovered)
+        var stillFailing = failedThisCycle.Select(f => f.AccountId).ToHashSet(StringComparer.Ordinal);
+        var recovered = _failingAccounts.Where(kv => !stillFailing.Contains(kv.Key)).ToList();
+        foreach (var (accountId, label) in recovered)
         {
-            _failingProviders.Remove(provider);
-            var name = provider.DisplayName();
-            notifier.ShowMessage($"{name} sync restored", $"Trayage is receiving {name} activity again.");
+            _failingAccounts.Remove(accountId);
+            notifier.ShowMessage($"{label} sync restored", $"Trayage is receiving {label} activity again.");
         }
     }
 
@@ -142,7 +144,7 @@ public sealed class InboxPollingService(
         var configured = TimeSpan.FromSeconds(Math.Max(settings.Load().PollIntervalSeconds, 1));
 
         // Never poll faster than any provider recommends, nor faster than our own floor.
-        var providerFloor = providers
+        var providerFloor = registry.All
             .Select(p => p.SuggestedPollInterval)
             .Where(t => t.HasValue)
             .Select(t => t!.Value)
