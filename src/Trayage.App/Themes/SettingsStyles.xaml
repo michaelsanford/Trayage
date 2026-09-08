@@ -44,7 +44,8 @@
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
     </Style>
 
-    <!-- Monospace metadata, matching the inbox flyout's treatment of codes and counts. -->
+    <!-- Monospace metadata, for values that really are code or machine identifiers — device
+         codes, version strings. Prose-like metadata stays in the UI font. -->
     <Style x:Key="MonoCaptionTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
         <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
     </Style>

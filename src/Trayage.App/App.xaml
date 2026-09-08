@@ -16,6 +16,7 @@
             <local:InverseBooleanConverter x:Key="InverseBool" />
             <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
             <local:EmptyStringToCollapsedConverter x:Key="EmptyStringToCollapsed" />
+            <local:RepoSegmentConverter x:Key="RepoSegment" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

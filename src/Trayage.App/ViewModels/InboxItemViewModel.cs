@@ -89,11 +89,15 @@ public sealed class InboxItemViewModel
 
     public string RelativeTime => FormatRelative(Item.UpdatedAt);
 
+    /// <summary>
+    /// The row's second line: what the item is, not when it moved. <see cref="RelativeTime"/>
+    /// is rendered separately, right-aligned on the title line, so it stays out of here.
+    /// </summary>
     public string Subtitle
     {
         get
         {
-            var parts = new List<string>(4);
+            var parts = new List<string>(3);
             if (_includeRepoInSubtitle)
             {
                 parts.Add(RepositoryFullName);
@@ -105,7 +109,6 @@ public sealed class InboxItemViewModel
                 parts.Add(account);
             }
 
-            parts.Add(RelativeTime);
             return string.Join(" · ", parts);
         }
     }
