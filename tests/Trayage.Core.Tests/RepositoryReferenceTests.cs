@@ -33,4 +33,28 @@ public sealed class RepositoryReferenceTests
     {
         Assert.Null(RepositoryReference.Normalize(input));
     }
+
+    [Theory]
+    [InlineData("acme/widgets", "acme", "widgets")]
+    // Only the first slash separates owner from repo; the rest belongs to the name, which is
+    // what GitLab subgroups look like.
+    [InlineData("acme/group/widgets", "acme", "group/widgets")]
+    public void Split_SeparatesOwnerFromRepository(string input, string owner, string name)
+    {
+        Assert.Equal((owner, name), RepositoryReference.Split(input));
+    }
+
+    /// <summary>
+    /// The inbox also groups by recency bucket, whose header is a plain word. Those come back
+    /// whole as the name so the flyout can render either shape without special-casing.
+    /// </summary>
+    [Theory]
+    [InlineData("Today", "Today")]
+    [InlineData("acme", "acme")]
+    [InlineData("", "")]
+    [InlineData(null, "")]
+    public void Split_WithoutASlash_ReturnsNoOwner(string? input, string name)
+    {
+        Assert.Equal((string.Empty, name), RepositoryReference.Split(input));
+    }
 }

@@ -49,7 +49,7 @@
                             <Border x:Name="focusRing"
                                     CornerRadius="10"
                                     BorderThickness="1"
-                                    BorderBrush="{DynamicResource AccentControlElevationBorderBrush}"
+                                    BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
                                     IsHitTestVisible="False"
                                     Visibility="Collapsed" />
                         </Grid>
@@ -68,6 +68,95 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Group header: a disclosure control, so it reuses RowButton's flat treatment —
+             including the hand cursor, since the whole strip toggles the group — with tighter
+             padding and the vertical rhythm that used to sit on the header template. -->
+        <Style x:Key="GroupHeaderButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="Margin" Value="0,10,10,0" />
+        </Style>
+
+        <!-- The group name is a plain string from the collection view, and its shape depends on
+             the grouping: "owner/repo", a bare owner, or a recency bucket ("Today"). Two columns
+             rather than inline Runs so the owner can be de-emphasised and the name trimmed with
+             no XAML-whitespace gap between them; RepoSegment yields an empty owner for a label
+             with no slash, which then renders as a single word. -->
+        <DataTemplate x:Key="InboxGroupHeaderTemplate" DataType="{x:Type CollectionViewGroup}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <ui:SymbolIcon Grid.Column="0"
+                               FontSize="12"
+                               Margin="0,0,4,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                    <ui:SymbolIcon.Symbol>
+                        <MultiBinding Converter="{StaticResource GroupCollapsed}" ConverterParameter="Symbol">
+                            <Binding Path="Name" />
+                            <Binding Path="DataContext.Grouping" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                            <Binding Path="DataContext.CollapsedGroups" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                            <Binding Path="DataContext.CollapsedGroups.Count" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                        </MultiBinding>
+                    </ui:SymbolIcon.Symbol>
+                </ui:SymbolIcon>
+
+                <!-- Brand mark, shown only when the header is an owner: the same org name can
+                     exist on two providers. It reads the group's first item, so an owner that
+                     genuinely spans providers shows just one of them — the grouping pools them
+                     by name, and splitting owners per provider isn't what the setting promises. -->
+                <Path Grid.Column="1"
+                      Stretch="Uniform" Width="10" Height="10"
+                      Margin="0,0,5,0"
+                      VerticalAlignment="Center">
+                    <Path.Style>
+                        <Style TargetType="Path">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Setter Property="Data" Value="{StaticResource GitHubMarkGeometry}" />
+                            <Setter Property="Fill" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.Grouping, RelativeSource={RelativeSource AncestorType=ListView}}" Value="Owner">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Items[0].Provider}" Value="Bitbucket">
+                                    <Setter Property="Data" Value="{StaticResource BitbucketMarkGeometry}" />
+                                    <Setter Property="Fill" Value="{StaticResource BitbucketBlueBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Items[0].Provider}" Value="GitLab">
+                                    <Setter Property="Data" Value="{StaticResource GitLabMarkGeometry}" />
+                                    <Setter Property="Fill" Value="{StaticResource GitLabOrangeBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Path.Style>
+                </Path>
+
+                <TextBlock Grid.Column="2"
+                           Text="{Binding Name, Converter={StaticResource RepoSegment}, ConverterParameter=Owner}"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                <TextBlock Grid.Column="3"
+                           Text="{Binding Name, Converter={StaticResource RepoSegment}}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <TextBlock Grid.Column="4"
+                           Text="{Binding ItemCount}"
+                           FontSize="12"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+            </Grid>
+        </DataTemplate>
     </Window.Resources>
 
     <Border Background="{DynamicResource ApplicationBackgroundBrush}"
@@ -121,47 +210,53 @@
                            HorizontalAlignment="Center" />
             </StackPanel>
 
+            <!-- TabNavigation=Continue because the interactive elements here are the group
+                 header and row Buttons, not the item containers: a ListView is otherwise a
+                 single tab stop that hands focus to a container and navigates with the arrow
+                 keys, and these containers are deliberately not focusable, which would leave
+                 every row unreachable from the keyboard. -->
             <ListView Grid.Row="1"
                       ItemsSource="{Binding ItemsView}"
                       Background="Transparent"
                       BorderThickness="0"
+                      IsTabStop="False"
+                      KeyboardNavigation.TabNavigation="Continue"
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                       VirtualizingPanel.IsVirtualizingWhenGrouping="True"
                       VirtualizingPanel.ScrollUnit="Pixel">
+                <!-- Groups are collapsible, so the container owns both the header and the body
+                     (see GroupHeaderButton / InboxGroupHeaderTemplate in Window.Resources).
+                     Collapsing hides the ItemsPresenter rather than swapping templates, which
+                     keeps grouped virtualization intact. -->
                 <ListView.GroupStyle>
                     <GroupStyle>
-                        <GroupStyle.HeaderTemplate>
-                            <!-- The group name is a plain string from the collection view, and its
-                                 shape depends on the grouping: "owner/repo", a bare owner, or a
-                                 recency bucket ("Today"). Two columns rather than inline Runs so
-                                 the owner can be de-emphasised and the name trimmed, with no
-                                 XAML-whitespace gap between them. RepoSegment yields an empty
-                                 owner for a label with no slash, which then renders as one word. -->
-                            <DataTemplate DataType="{x:Type CollectionViewGroup}">
-                                <Grid Margin="6,14,10,4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0"
-                                               Text="{Binding Name, Converter={StaticResource RepoSegment}, ConverterParameter=Owner}"
-                                               FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                                    <TextBlock Grid.Column="1"
-                                               Text="{Binding Name, Converter={StaticResource RepoSegment}}"
-                                               FontSize="12"
-                                               FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    <TextBlock Grid.Column="2"
-                                               Text="{Binding ItemCount}"
-                                               FontSize="12"
-                                               Margin="8,0,0,0"
-                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                                </Grid>
-                            </DataTemplate>
-                        </GroupStyle.HeaderTemplate>
+                        <GroupStyle.ContainerStyle>
+                            <Style TargetType="GroupItem">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="GroupItem">
+                                            <StackPanel>
+                                                <Button Style="{StaticResource GroupHeaderButton}"
+                                                        Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                        CommandParameter="{Binding Name}"
+                                                        ContentTemplate="{StaticResource InboxGroupHeaderTemplate}"
+                                                        Content="{Binding}" />
+                                                <ItemsPresenter>
+                                                    <ItemsPresenter.Visibility>
+                                                        <MultiBinding Converter="{StaticResource GroupCollapsed}">
+                                                            <Binding Path="Name" />
+                                                            <Binding Path="DataContext.Grouping" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                                                            <Binding Path="DataContext.CollapsedGroups" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                                                            <Binding Path="DataContext.CollapsedGroups.Count" RelativeSource="{RelativeSource AncestorType=ListView}" />
+                                                        </MultiBinding>
+                                                    </ItemsPresenter.Visibility>
+                                                </ItemsPresenter>
+                                            </StackPanel>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </GroupStyle.ContainerStyle>
                     </GroupStyle>
                 </ListView.GroupStyle>
                 <!-- The container is deliberately templated down to a bare ContentPresenter.
@@ -320,11 +415,14 @@
                                            Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
 
                                 <!-- Unread dot -->
+                                <!-- Top-aligned so it sits beside the relative time on the
+                                     title line, rather than drifting down the middle of a row
+                                     whose height now depends on how far the title wraps. -->
                                 <Ellipse Grid.Column="3"
                                          Width="9" Height="9"
                                          Fill="{StaticResource TrayageUnreadBrush}"
-                                         VerticalAlignment="Center"
-                                         Margin="10,0,2,0"
+                                         VerticalAlignment="Top"
+                                         Margin="8,5,2,0"
                                          Visibility="{Binding IsUnread, Converter={StaticResource BoolToVisibility}}">
                                     <Ellipse.Effect>
                                         <DropShadowEffect Color="#E5484D" BlurRadius="10" ShadowDepth="0" Opacity="0.7" />

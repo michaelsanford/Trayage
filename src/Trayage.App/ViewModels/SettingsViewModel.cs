@@ -22,6 +22,9 @@ public sealed record PollIntervalOption(string Label, int Seconds);
 
 public sealed record NotificationStyleOption(string Label, NotificationStyle Style);
 
+/// <summary>A selectable inbox layout: a display label and the grouping it applies.</summary>
+public sealed record InboxGroupingOption(string Label, InboxGrouping Grouping);
+
 public sealed record NotificationSoundOption(string Label, string Value);
 
 /// <summary>An entry in the "Add account" menu: which provider a new account would connect to.</summary>
@@ -62,7 +65,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _startWithWindows;
     [ObservableProperty] private AppTheme _selectedTheme;
     [ObservableProperty] private bool _verboseLogging;
-    [ObservableProperty] private bool _groupByRepository;
+    [ObservableProperty] private InboxGrouping _selectedInboxGrouping;
     [ObservableProperty] private bool _showReadItems;
     [ObservableProperty] private bool _surfaceRecentlyModified;
 
@@ -229,6 +232,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         new PollIntervalOption("1 hour", 3600),
     };
 
+    public IReadOnlyList<InboxGroupingOption> InboxGroupingOptions { get; } = new[]
+    {
+        new InboxGroupingOption("Repository", InboxGrouping.Repository),
+        new InboxGroupingOption("Owner / organisation", InboxGrouping.Owner),
+        new InboxGroupingOption("Time (flat list)", InboxGrouping.Time),
+    };
+
     public IReadOnlyList<NotificationStyleOption> NotificationStyleOptions { get; } = new[]
     {
         new NotificationStyleOption("Toast and sound", NotificationStyle.Both),
@@ -351,7 +361,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnVerboseLoggingChanged(bool value) => Persist();
 
-    partial void OnGroupByRepositoryChanged(bool value)
+    partial void OnSelectedInboxGroupingChanged(InboxGrouping value)
     {
         if (_loading)
         {
@@ -439,7 +449,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         SelectedTheme = s.Theme;
         VerboseLogging = s.VerboseLogging;
-        GroupByRepository = s.GroupByRepository;
+        SelectedInboxGrouping = s.Grouping;
         ShowReadItems = s.ShowReadItems;
         SurfaceRecentlyModified = s.SurfaceRecentlyModified;
         StartWithWindows = AutostartManager.IsEnabled();
@@ -459,7 +469,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.PollIntervalSeconds = PollIntervalSeconds;
         s.Theme = SelectedTheme;
         s.VerboseLogging = VerboseLogging;
-        s.GroupByRepository = GroupByRepository;
+        s.Grouping = SelectedInboxGrouping;
         s.ShowReadItems = ShowReadItems;
         s.SurfaceRecentlyModified = SurfaceRecentlyModified;
         s.StartWithWindows = StartWithWindows;

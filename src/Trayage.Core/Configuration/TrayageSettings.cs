@@ -17,6 +17,19 @@ public enum NotificationStyle
     AudioOnly
 }
 
+/// <summary>How the inbox flyout lays its items out.</summary>
+public enum InboxGrouping
+{
+    /// <summary>One group per "owner/repo".</summary>
+    Repository,
+
+    /// <summary>One group per owner or organisation, pooling all of its repositories.</summary>
+    Owner,
+
+    /// <summary>No repository grouping: newest first, under Today / Yesterday / … headers.</summary>
+    Time,
+}
+
 /// <summary>
 /// Which classes of new activity should raise a Windows toast. Watched-repo activity
 /// is governed separately by each account's watched-repository list.
@@ -85,8 +98,23 @@ public sealed class TrayageSettings
     /// <summary>When true, the file logger captures Debug-level detail (applies on next launch).</summary>
     public bool VerboseLogging { get; set; }
 
-    /// <summary>When true, the inbox flyout groups items by repository; otherwise a flat, newest-first list.</summary>
-    public bool GroupByRepository { get; set; } = true;
+    /// <summary>How the inbox flyout groups its items.</summary>
+    public InboxGrouping Grouping { get; set; } = InboxGrouping.Repository;
+
+    /// <summary>
+    /// Legacy two-way grouping flag, superseded by <see cref="Grouping"/>. Read once by
+    /// <see cref="SettingsMigration"/>, which translates it and then nulls it out; null is
+    /// not written back, so it disappears from the file on the first upgraded save.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? GroupByRepository { get; set; }
+
+    /// <summary>
+    /// Inbox groups the user has collapsed, as grouping-qualified keys (see
+    /// <c>InboxViewModel.GroupKey</c>) so a collapsed owner doesn't also collapse a
+    /// same-named repository group after the grouping changes.
+    /// </summary>
+    public List<string> CollapsedInboxGroups { get; init; } = new();
 
     /// <summary>When true, the inbox flyout shows read items (de-emphasised); otherwise only unread items appear.</summary>
     public bool ShowReadItems { get; set; } = true;
@@ -147,7 +175,9 @@ public sealed class TrayageSettings
         StartWithWindows = StartWithWindows,
         FirstRunCompleted = FirstRunCompleted,
         VerboseLogging = VerboseLogging,
+        Grouping = Grouping,
         GroupByRepository = GroupByRepository,
+        CollapsedInboxGroups = new List<string>(CollapsedInboxGroups),
         ShowReadItems = ShowReadItems,
         SurfaceRecentlyModified = SurfaceRecentlyModified,
         Notifications = new NotificationSettings

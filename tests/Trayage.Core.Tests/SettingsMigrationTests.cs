@@ -157,5 +157,75 @@ public sealed class SettingsMigrationTests
         var settings = _settings.Load();
         Assert.Empty(settings.Accounts);
         Assert.Equal(SettingsMigration.CurrentSchemaVersion, settings.SchemaVersion);
+        Assert.Equal(InboxGrouping.Repository, settings.Grouping);
+    }
+
+    /// <summary>
+    /// The v2 step: the old two-way GroupByRepository flag becomes an InboxGrouping. False meant
+    /// the flat newest-first list, so it has to land on Time rather than quietly turning into the
+    /// repository grouping the user had switched off.
+    /// </summary>
+    [Theory]
+    [InlineData(true, InboxGrouping.Repository)]
+    [InlineData(false, InboxGrouping.Time)]
+    public void Run_LegacyGroupByRepository_BecomesTheEquivalentGrouping(bool legacy, InboxGrouping expected)
+    {
+        var settings = _settings.Load();
+        settings.SchemaVersion = 1;
+        settings.GroupByRepository = legacy;
+        _settings.Save(settings);
+
+        Assert.True(Run());
+
+        var migrated = _settings.Load();
+        Assert.Equal(expected, migrated.Grouping);
+        // Nulled so it stops being written, leaving one place that decides the layout.
+        Assert.Null(migrated.GroupByRepository);
+        Assert.Equal(SettingsMigration.CurrentSchemaVersion, migrated.SchemaVersion);
+    }
+
+    [Fact]
+    public void Run_V1FileWithoutTheLegacyFlag_KeepsTheDefaultGrouping()
+    {
+        var settings = _settings.Load();
+        settings.SchemaVersion = 1;
+        _settings.Save(settings);
+
+        Assert.True(Run());
+        Assert.Equal(InboxGrouping.Repository, _settings.Load().Grouping);
+    }
+
+    /// <summary>
+    /// A v1 file has already been through the accounts step, so the upgrade to v2 must not run it
+    /// again — a stale legacy slot alongside no accounts would otherwise resurrect a duplicate.
+    /// </summary>
+    [Fact]
+    public void Run_V1ToV2_DoesNotReRunTheAccountsStep()
+    {
+        SeedLegacyGitHub();
+        var settings = _settings.Load();
+        settings.SchemaVersion = 1;
+        settings.GroupByRepository = false;
+        _settings.Save(settings);
+
+        Assert.True(Run());
+
+        var migrated = _settings.Load();
+        Assert.Empty(migrated.Accounts);
+        Assert.Equal(InboxGrouping.Time, migrated.Grouping);
+    }
+
+    [Fact]
+    public void Run_AlreadyCurrent_LeavesTheGroupingAlone()
+    {
+        var settings = _settings.Load();
+        settings.SchemaVersion = SettingsMigration.CurrentSchemaVersion;
+        settings.Grouping = InboxGrouping.Owner;
+        // A legacy flag left in a current file is inert, not a downgrade instruction.
+        settings.GroupByRepository = true;
+        _settings.Save(settings);
+
+        Assert.False(Run());
+        Assert.Equal(InboxGrouping.Owner, _settings.Load().Grouping);
     }
 }

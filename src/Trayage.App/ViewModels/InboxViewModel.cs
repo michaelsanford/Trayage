@@ -59,6 +59,48 @@ public sealed partial class InboxViewModel : ObservableObject
     /// <summary>Grouped/sorted view the flyout binds to; shaped by the display settings.</summary>
     public ICollectionView ItemsView { get; }
 
+    /// <summary>
+    /// The grouping currently applied to <see cref="ItemsView"/>. The flyout reads it to decide
+    /// what a group header means — only an owner header carries a provider, for instance.
+    /// </summary>
+    public InboxGrouping Grouping => _lastGrouping ?? InboxGrouping.Repository;
+
+    /// <summary>
+    /// Group headers the user has collapsed, as <see cref="GroupKey"/> values. A collection
+    /// rather than a set because the flyout binds to it: the group template watches it for
+    /// changes to re-evaluate each group's visibility.
+    /// </summary>
+    public ObservableCollection<string> CollapsedGroups { get; } = new();
+
+    /// <summary>
+    /// Qualifies a group's display name with the grouping that produced it, so collapsing the
+    /// "acme" owner group doesn't also collapse an "acme" repository group once the user
+    /// switches grouping. Case-insensitive to match the grouping comparison.
+    /// </summary>
+    public static string GroupKey(InboxGrouping grouping, string? name) =>
+        string.Concat(grouping.ToString(), ":", name?.ToLowerInvariant() ?? string.Empty);
+
+    /// <summary>Collapses or expands one group, persisting the change so it survives a restart.</summary>
+    [RelayCommand]
+    private void ToggleGroup(string? name)
+    {
+        if (name is null)
+        {
+            return;
+        }
+
+        var key = GroupKey(Grouping, name);
+        if (!CollapsedGroups.Remove(key))
+        {
+            CollapsedGroups.Add(key);
+        }
+
+        var settings = _settings.Load();
+        settings.CollapsedInboxGroups.Clear();
+        settings.CollapsedInboxGroups.AddRange(CollapsedGroups);
+        _settings.Save(settings);
+    }
+
     public bool IsEmpty => Items.Count == 0;
 
     [RelayCommand]
@@ -133,13 +175,80 @@ public sealed partial class InboxViewModel : ObservableObject
     private void OnStateChanged(object? sender, EventArgs e) =>
         Application.Current?.Dispatcher.Invoke(Rebuild);
 
-    private bool? _lastGroupByRepo;
+    private InboxGrouping? _lastGrouping;
 
     /// <summary>
     /// Set when the last manual refresh had a failing provider; appended to <see cref="StatusText"/>
     /// on every render so a re-render doesn't drop the warning. Null when everything is healthy.
     /// </summary>
     private string? _degradedNotice;
+
+    /// <summary>
+    /// Rebuilds the view's grouping and sorting for one <see cref="InboxGrouping"/>.
+    ///
+    /// Groups appear in the order of the *first* sort description, so how to group and how to
+    /// sort are two halves of one decision. That's why the recency buckets deliberately don't
+    /// sort by their key: alphabetically they'd read "Earlier this week, Older, Today,
+    /// Yesterday", whereas sorting by UpdatedAt puts both the buckets and the rows inside them
+    /// in the order the user expects.
+    /// </summary>
+    private void ApplyGrouping(InboxGrouping grouping)
+    {
+        // Providers don't agree on owner casing, and PropertyGroupDescription compares group
+        // names as strings — without this, one org can end up under two headers.
+        var groupBy = new PropertyGroupDescription(grouping switch
+        {
+            InboxGrouping.Repository => nameof(InboxItemViewModel.RepositoryFullName),
+            InboxGrouping.Owner => nameof(InboxItemViewModel.RepositoryOwner),
+            _ => nameof(InboxItemViewModel.TimeBucket),
+        })
+        {
+            StringComparison = StringComparison.OrdinalIgnoreCase,
+        };
+
+        using (ItemsView.DeferRefresh())
+        {
+            ItemsView.GroupDescriptions.Clear();
+            ItemsView.SortDescriptions.Clear();
+
+            switch (grouping)
+            {
+                case InboxGrouping.Repository:
+                    ItemsView.SortDescriptions.Add(new SortDescription(nameof(InboxItemViewModel.RepositoryFullName), ListSortDirection.Ascending));
+                    break;
+
+                case InboxGrouping.Owner:
+                    ItemsView.SortDescriptions.Add(new SortDescription(nameof(InboxItemViewModel.RepositoryOwner), ListSortDirection.Ascending));
+
+                    // Keeps one repository's rows together inside an owner group — the readable
+                    // half of nesting repositories under owners, without the second level of
+                    // headers that would cost too much in a 400px flyout.
+                    ItemsView.SortDescriptions.Add(new SortDescription(nameof(InboxItemViewModel.RepositoryFullName), ListSortDirection.Ascending));
+                    break;
+            }
+
+            ItemsView.SortDescriptions.Add(new SortDescription(nameof(InboxItemViewModel.UpdatedAt), ListSortDirection.Descending));
+            ItemsView.GroupDescriptions.Add(groupBy);
+        }
+    }
+
+    /// <summary>
+    /// Re-seeds <see cref="CollapsedGroups"/> from the persisted set, keeping only the keys
+    /// belonging to the grouping now in effect so the flyout never has to reason about keys
+    /// left behind by another grouping.
+    /// </summary>
+    private void ReloadCollapsedGroups(TrayageSettings settings, InboxGrouping grouping)
+    {
+        var prefix = string.Concat(grouping.ToString(), ":");
+        CollapsedGroups.Clear();
+        foreach (var key in settings.CollapsedInboxGroups)
+        {
+            if (key.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                CollapsedGroups.Add(key);
+            }
+        }
+    }
 
     /// <summary>
     /// Re-renders from the cached snapshot. This parameterless overload exists so the method
@@ -157,8 +266,7 @@ public sealed partial class InboxViewModel : ObservableObject
     private void Rebuild(bool force)
     {
         var settings = _settings.Load();
-        var groupByRepo = settings.GroupByRepository;
-        var includeRepo = !groupByRepo;
+        var grouping = settings.Grouping;
 
         // Only name the account when it actually disambiguates — a single-account user should
         // see exactly the subtitle they saw before accounts existed.
@@ -190,10 +298,10 @@ public sealed partial class InboxViewModel : ObservableObject
             }
 
             // Reuse only when the underlying (immutable) item is value-equal and the subtitle
-            // layout, which depends on groupByRepo, hasn't flipped since the last render.
+            // layout, which depends on the grouping, hasn't changed since the last render.
             labelsByAccount.TryGetValue(item.AccountId, out var accountLabel);
 
-            if (groupByRepo == _lastGroupByRepo &&
+            if (grouping == _lastGrouping &&
                 existing.TryGetValue(item.Key, out var vm) && vm.Item == item &&
                 vm.AccountLabel == accountLabel)
             {
@@ -201,33 +309,19 @@ public sealed partial class InboxViewModel : ObservableObject
             }
             else
             {
-                target.Add(new InboxItemViewModel(item, includeRepoInSubtitle: includeRepo, accountLabel: accountLabel));
+                target.Add(new InboxItemViewModel(item, grouping, accountLabel));
             }
         }
 
         var changed = SyncItems(target);
 
-        var groupingChanged = groupByRepo != _lastGroupByRepo;
+        var groupingChanged = grouping != _lastGrouping;
         if (groupingChanged)
         {
-            using (ItemsView.DeferRefresh())
-            {
-                ItemsView.GroupDescriptions.Clear();
-                ItemsView.SortDescriptions.Clear();
-                if (groupByRepo)
-                {
-                    ItemsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(InboxItemViewModel.RepositoryFullName)));
-                }
-                else
-                {
-                    // Flat list: newest first, grouped under Today / Yesterday / … recency headers.
-                    // Sorting by UpdatedAt descending also fixes the order the buckets appear in.
-                    ItemsView.SortDescriptions.Add(new SortDescription(nameof(InboxItemViewModel.UpdatedAt), ListSortDirection.Descending));
-                    ItemsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(InboxItemViewModel.TimeBucket)));
-                }
-            }
-
-            _lastGroupByRepo = groupByRepo;
+            ApplyGrouping(grouping);
+            _lastGrouping = grouping;
+            OnPropertyChanged(nameof(Grouping));
+            ReloadCollapsedGroups(settings, grouping);
         }
         else if (changed || force)
         {

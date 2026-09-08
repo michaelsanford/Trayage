@@ -46,8 +46,11 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
 
 ## Features
 
-- **Unified inbox** in a tray flyout — grouped by repository or as a flat newest-first
-  list, with the option to hide already-read items. Click any item to open it in your browser.
+- **Unified inbox** in a tray flyout — grouped by repository, by owner or organisation, or
+  ungrouped as a flat newest-first list under Today / Yesterday headers. Groups sort
+  alphabetically with the newest items first inside each, collapse when you click their
+  header, and stay collapsed across restarts. Already-read items can be hidden. Click any
+  item to open it in your browser.
 - **Several accounts per service** — a work and a personal GitHub, two Bitbucket workspaces
   under different logins. Each account keeps its own sign-in, its own watched repositories,
   and can be paused without disconnecting it. When more than one account is connected to the
@@ -78,8 +81,8 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
   **General**, and **About**. **Accounts** is the list of connected accounts: expand one to
   rename it, pause it, disconnect or remove it, pick its watched repositories (Bitbucket), or
   jump to the service's own notification settings (GitHub and GitLab, where that activity is
-  actually controlled). The rest cover notification classes and sound, inbox grouping and
-  read-item visibility, poll cadence, light/dark/system theme, "start with Windows", and
+  actually controlled). The rest cover notification classes and sound, how the inbox groups
+  its items and whether read ones show, poll cadence, light/dark/system theme, "start with Windows", and
   verbose logging.
 - **Secure tokens** — OAuth tokens are encrypted at rest with Windows DPAPI, keyed per
   account; nothing is stored in plaintext.

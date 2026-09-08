@@ -13,7 +13,13 @@ namespace Trayage.Core.Configuration;
 public static class SettingsMigration
 {
     /// <summary>The shape this build writes. Bump alongside a new migration step.</summary>
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
+
+    /// <summary>Schema that introduced multi-account support.</summary>
+    private const int AccountsSchemaVersion = 1;
+
+    /// <summary>Schema that replaced the GroupByRepository flag with <see cref="InboxGrouping"/>.</summary>
+    private const int GroupingSchemaVersion = 2;
 
     /// <summary>
     /// Migrates if needed and returns true when something was written. Must run before any
@@ -30,15 +36,40 @@ public static class SettingsMigration
             return false;
         }
 
-        // A settings file that already has accounts (or is brand new) only needs the stamp.
-        if (current.Accounts.Count == 0)
+        // Each step is gated on its own version, not on the outer check, so a file that is
+        // merely behind by one schema doesn't re-run the steps it already went through.
+        // A file that already has accounts (or is brand new) only needs the stamp.
+        if (current.SchemaVersion < AccountsSchemaVersion && current.Accounts.Count == 0)
         {
             MigrateLegacyAccounts(current, secrets, logger);
+        }
+
+        if (current.SchemaVersion < GroupingSchemaVersion)
+        {
+            MigrateGrouping(current, logger);
         }
 
         current.SchemaVersion = CurrentSchemaVersion;
         settings.Save(current);
         return true;
+    }
+
+    /// <summary>
+    /// Translates the old two-way <c>GroupByRepository</c> flag into <see cref="InboxGrouping"/>.
+    /// False meant the flat, newest-first list, which is now <see cref="InboxGrouping.Time"/>;
+    /// true (and a file that never had the flag) means <see cref="InboxGrouping.Repository"/>,
+    /// the old default. Nulling the legacy field drops it from the next save.
+    /// </summary>
+    private static void MigrateGrouping(TrayageSettings settings, ILogger? logger)
+    {
+        if (settings.GroupByRepository is not { } groupByRepository)
+        {
+            return;
+        }
+
+        settings.Grouping = groupByRepository ? InboxGrouping.Repository : InboxGrouping.Time;
+        settings.GroupByRepository = null;
+        logger?.LogInformation("Migrated legacy GroupByRepository flag to grouping {Grouping}.", settings.Grouping);
     }
 
     private static void MigrateLegacyAccounts(TrayageSettings settings, ISecretStore secrets, ILogger? logger)

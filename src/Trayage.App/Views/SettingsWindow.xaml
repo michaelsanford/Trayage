@@ -592,12 +592,16 @@
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">
                             <ui:CardControl.Header>
                                 <StackPanel>
-                                    <TextBlock Text="Group by repository" Style="{StaticResource CardTitleTextStyle}" />
-                                    <TextBlock Text="Group inbox items under each repository. Off shows a single newest-first list."
+                                    <TextBlock Text="Group by" Style="{StaticResource CardTitleTextStyle}" />
+                                    <TextBlock Text="One group per repository, one per owner or organisation, or no grouping at all — a single newest-first list under Today / Yesterday headers. Groups sort alphabetically, newest items first inside each."
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
                             </ui:CardControl.Header>
-                            <ui:ToggleSwitch IsChecked="{Binding GroupByRepository}" />
+                            <ComboBox ItemsSource="{Binding InboxGroupingOptions}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Grouping"
+                                      SelectedValue="{Binding SelectedInboxGrouping}"
+                                      MinWidth="160" />
                         </ui:CardControl>
 
                         <ui:CardControl Style="{StaticResource SettingsCardStyle}">

@@ -1,7 +1,10 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
+using Trayage.App.ViewModels;
+using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
+using Wpf.Ui.Controls;
 
 namespace Trayage.App;
 
@@ -57,5 +60,34 @@ public sealed class RepoSegmentConverter : IValueConverter
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>
+/// Resolves whether one inbox group is collapsed. A <see cref="CollectionViewGroup"/> carries no
+/// such state, so it lives on the view model: this takes the group's name, the grouping in
+/// effect, and the collapsed-key collection — the last of those purely so its change
+/// notification re-evaluates the binding — and looks the group up.
+///
+/// <c>ConverterParameter="Symbol"</c> returns the disclosure chevron instead of a visibility, so
+/// the header glyph and the group body can share one lookup.
+/// </summary>
+public sealed class GroupCollapsedConverter : IMultiValueConverter
+{
+    public object Convert(object?[] values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var collapsed =
+            values is [string name, InboxGrouping grouping, IEnumerable<string> keys, ..] &&
+            keys.Contains(InboxViewModel.GroupKey(grouping, name), StringComparer.Ordinal);
+
+        if (string.Equals(parameter as string, "Symbol", StringComparison.Ordinal))
+        {
+            return collapsed ? SymbolRegular.ChevronRight12 : SymbolRegular.ChevronDown12;
+        }
+
+        return collapsed ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    public object[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();
 }
