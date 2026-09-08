@@ -557,6 +557,17 @@ public sealed class BitbucketProvider : IInboxProvider
         return await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Always <see cref="MarkAsReadOutcome.NotSupported"/>: Bitbucket Cloud has no notification
+    /// inbox, so its items are assembled from pull-request queries and there is no server-side
+    /// object to mark. Trayage's local read marks are the only read state Bitbucket items have.
+    /// </summary>
+    public Task<MarkAsReadOutcome> TryMarkAsReadAsync(InboxItem item, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return Task.FromResult(MarkAsReadOutcome.NotSupported);
+    }
+
     /// <summary>Sends an authenticated request, refreshing the access token once on 401.</summary>
     private async Task<HttpResponseMessage?> SendWithAuthAsync(Func<HttpRequestMessage> requestFactory, CancellationToken ct)
     {

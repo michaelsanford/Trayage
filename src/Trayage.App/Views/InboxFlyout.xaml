@@ -77,6 +77,51 @@
             <Setter Property="Margin" Value="0,10,10,0" />
         </Style>
 
+        <!-- Small icon action nested inside a row or group header. Square and quiet: it borrows
+             RowButton's flat chrome but at icon size, and reveals itself only on hover or
+             keyboard focus so the resting row stays uncluttered. The space it occupies is
+             reserved by its column either way, so nothing shifts when it appears. -->
+        <Style x:Key="RowActionButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <!-- Only meaningful while the item is unread; the ancestor is the row or header
+                     Button this sits inside. -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsUnread}" Value="True" />
+                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsUnread}" Value="True" />
+                        <Condition Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- As above, for a group header, where there's no IsUnread to gate on. -->
+        <Style x:Key="GroupActionButton" TargetType="Button" BasedOn="{StaticResource RowActionButton}">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- The group name is a plain string from the collection view, and its shape depends on
              the grouping: "owner/repo", a bare owner, or a recency bucket ("Today"). Two columns
              rather than inline Runs so the owner can be de-emphasised and the name trimmed with
@@ -90,6 +135,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="24" />
                 </Grid.ColumnDefinitions>
 
                 <ui:SymbolIcon Grid.Column="0"
@@ -155,6 +201,16 @@
                            Margin="8,0,0,0"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+                <Button Grid.Column="5"
+                        Style="{StaticResource GroupActionButton}"
+                        Margin="4,0,0,0"
+                        ToolTip="Mark this group read"
+                        AutomationProperties.Name="Mark this group read"
+                        Command="{Binding DataContext.MarkGroupReadCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                        CommandParameter="{Binding Name}">
+                    <ui:SymbolIcon Symbol="MailReadMultiple24" FontSize="14" />
+                </Button>
             </Grid>
         </DataTemplate>
     </Window.Resources>
@@ -180,6 +236,13 @@
                 <StackPanel Orientation="Horizontal"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center">
+                    <ui:Button Appearance="Secondary"
+                               Icon="{ui:SymbolIcon MailReadMultiple24}"
+                               ToolTip="Mark everything read"
+                               AutomationProperties.Name="Mark everything read"
+                               Command="{Binding MarkAllReadCommand}"
+                               IsEnabled="{Binding HasUnread}"
+                               Margin="0,0,8,0" />
                     <ui:Button Appearance="Secondary"
                                Icon="{ui:SymbolIcon ArrowSync24}"
                                ToolTip="Refresh"
@@ -301,6 +364,9 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
+                                    <!-- Reserved rather than Auto, so revealing the action on
+                                         hover doesn't reflow the row under the pointer. -->
+                                    <ColumnDefinition Width="26" />
                                 </Grid.ColumnDefinitions>
 
                                 <!-- Kind + provider badge: a filled shape coloured by provider
@@ -428,6 +494,19 @@
                                         <DropShadowEffect Color="#E5484D" BlurRadius="10" ShadowDepth="0" Opacity="0.7" />
                                     </Ellipse.Effect>
                                 </Ellipse>
+
+                                <!-- Nested inside the row Button. ButtonBase handles the mouse
+                                     events, so clicking here marks read without also firing the
+                                     row's open command. -->
+                                <Button Grid.Column="4"
+                                        Style="{StaticResource RowActionButton}"
+                                        VerticalAlignment="Top"
+                                        ToolTip="Mark as read"
+                                        AutomationProperties.Name="Mark as read"
+                                        Command="{Binding DataContext.MarkReadCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                        CommandParameter="{Binding}">
+                                    <ui:SymbolIcon Symbol="MailRead16" FontSize="14" />
+                                </Button>
                             </Grid>
                         </Button>
                     </DataTemplate>

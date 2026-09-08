@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Octokit;
@@ -134,6 +135,41 @@ public sealed class GitHubProvider : IInboxProvider
         }
 
         return items;
+    }
+
+    /// <summary>
+    /// Marks the notification thread read on GitHub. <see cref="InboxItem.Id"/> is the raw thread
+    /// id (see <see cref="Map"/>), and the <c>notifications</c> scope Trayage already requests
+    /// covers this write, so no re-consent is involved.
+    ///
+    /// This goes through the raw connection rather than
+    /// <c>Activity.Notifications.MarkAsRead(int)</c>: that overload takes an <see cref="int"/>,
+    /// and current GitHub thread ids are around eleven digits, so they overflow it. Keeping the
+    /// id as the string GitHub gave us avoids the conversion entirely.
+    /// </summary>
+    public async Task<MarkAsReadOutcome> TryMarkAsReadAsync(InboxItem item, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        if (!IsConnected)
+        {
+            return MarkAsReadOutcome.NotSupported;
+        }
+
+        var status = await _client.Connection
+            .Patch(new Uri($"notifications/threads/{Uri.EscapeDataString(item.Id)}", UriKind.Relative))
+            .ConfigureAwait(false);
+
+        // 403 would mean the token predates the notifications scope; everything else non-2xx is
+        // transient and reported by the caller.
+        if (status == HttpStatusCode.Forbidden)
+        {
+            _logger.LogInformation("GitHub refused a notification write; the account's token lacks the notifications scope.");
+            return MarkAsReadOutcome.NeedsReauthorization;
+        }
+
+        _logger.LogDebug("Marked GitHub thread read ({Status}).", (int)status);
+        return MarkAsReadOutcome.Propagated;
     }
 
     private static InboxItem Map(Notification n, string accountId)

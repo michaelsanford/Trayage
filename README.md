@@ -51,6 +51,11 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
   alphabetically with the newest items first inside each, collapse when you click their
   header, and stay collapsed across restarts. Already-read items can be hidden. Click any
   item to open it in your browser.
+- **Mark as read** — one item from its row, a whole repository or owner from its group header,
+  or the entire inbox from the flyout header; opening an item marks it read too. Trayage tells
+  the service where it can (see the limitations below) and always remembers locally, so a mark
+  takes effect at once, survives a restart, and works offline. If the thread later sees genuine
+  new activity it comes back as unread and still raises a notification.
 - **Several accounts per service** — a work and a personal GitHub, two Bitbucket workspaces
   under different logins. Each account keeps its own sign-in, its own watched repositories,
   and can be paused without disconnecting it. When more than one account is connected to the
@@ -221,6 +226,16 @@ cosign verify-blob `
   endpoints (CHANGE-2770), so authored PRs, review requests, and repo activity are all
   queried per watched repo. A PR appears only if its repository is on that account's watched
   list — add repositories from the account's card in **Settings → Accounts**.
+- **Marking read reaches each service differently.** On GitHub the notification thread is
+  marked read on GitHub itself. On GitLab the to-do is marked done, which *removes* the item
+  rather than dimming it — Trayage reads the pending to-do list, and a done to-do is no longer
+  pending. Bitbucket has no notification inbox to mark, so its read marks are local to Trayage
+  and won't show anywhere else.
+- **GitLab accounts connected before mark-as-read existed need reconnecting.** GitLab
+  offers no narrow write scope, so marking a to-do done needs the full `api` scope where
+  Trayage previously asked only for `read_api`. Reads keep working on an older token; the
+  first attempt to mark read prompts you to reconnect that account, and the mark is kept
+  locally meanwhile.
 - **Bitbucket loopback port is fixed** at `33418` to match the consumer callback URL. If
   that port is in use, the connect step will report an error. It also means only one Bitbucket
   account can be authorized at a time — connect them one after another.

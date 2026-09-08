@@ -40,7 +40,8 @@ public sealed class InboxPollingServiceTests
     {
         var registry = TestProviders.Registry(_settings, providers);
         var inboxService = new InboxService(
-            registry, new InboxAggregator(), new InboxState(), _settings, NullLogger<InboxService>.Instance);
+            registry, new InboxAggregator(), new InboxState(), TestProviders.ReadState(), _settings,
+            NullLogger<InboxService>.Instance);
 
         return new InboxPollingService(
             inboxService,

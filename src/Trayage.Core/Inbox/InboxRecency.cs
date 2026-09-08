@@ -28,4 +28,20 @@ public static class InboxRecency
 
         return window is { } w && now - item.UpdatedAt <= w;
     }
+
+    /// <summary>
+    /// True when a read item should still be surfaced (shown in the flyout, eligible for a toast).
+    ///
+    /// The recency window exists to distrust a provider's read flag for a while. It must not
+    /// distrust the user: an item they marked read themselves is read, so
+    /// <see cref="InboxItem.IsExplicitlyRead"/> overrides the window. Without this, marking an
+    /// item read would leave it on screen for ~2× the poll interval, which reads as the click
+    /// having done nothing.
+    /// </summary>
+    public static bool ShouldSurfaceRead(InboxItem item, DateTimeOffset now, TimeSpan? window)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        return !item.IsExplicitlyRead && IsRecent(item, now, window);
+    }
 }

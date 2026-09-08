@@ -13,6 +13,25 @@ public sealed record InboxQuery(IReadOnlyCollection<string> WatchedRepositories)
     public static readonly InboxQuery Empty = new(Array.Empty<string>());
 }
 
+/// <summary>How far a read mark got on the provider's side.</summary>
+public enum MarkAsReadOutcome
+{
+    /// <summary>The service was told, and its own inbox now agrees.</summary>
+    Propagated,
+
+    /// <summary>
+    /// This provider has no way to record a read mark — Bitbucket Cloud has no notification
+    /// inbox — or isn't currently connected. An ordinary outcome, not a failure.
+    /// </summary>
+    NotSupported,
+
+    /// <summary>
+    /// The service refused the write because the account's token predates the write scope
+    /// Trayage now asks for. Reconnecting the account fixes it; the local mark stands meanwhile.
+    /// </summary>
+    NeedsReauthorization,
+}
+
 /// <summary>
 /// A source of inbox items for one <em>account</em> on one service. Implementations own their
 /// own auth state; the polling service only asks whether they are connected and pulls items.
@@ -47,4 +66,12 @@ public interface IInboxProvider
     /// the polling service is expected to catch and surface.
     /// </summary>
     Task<IReadOnlyList<InboxItem>> FetchInboxAsync(InboxQuery query, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Tells the service this item has been read. Anything other than
+    /// <see cref="MarkAsReadOutcome.Propagated"/> is an expected outcome rather than a failure:
+    /// Trayage records the mark locally either way, so callers never branch on the provider.
+    /// May throw on transient network/API failures, which callers are expected to catch.
+    /// </summary>
+    Task<MarkAsReadOutcome> TryMarkAsReadAsync(InboxItem item, CancellationToken cancellationToken);
 }

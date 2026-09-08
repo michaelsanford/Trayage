@@ -103,6 +103,9 @@ public sealed partial class InboxViewModel : ObservableObject
 
     public bool IsEmpty => Items.Count == 0;
 
+    /// <summary>Gates the header's mark-everything-read action; nothing unread, nothing to do.</summary>
+    public bool HasUnread => Items.Any(i => i.IsUnread);
+
     [RelayCommand]
     private async Task RefreshAsync()
     {
@@ -134,12 +137,91 @@ public sealed partial class InboxViewModel : ObservableObject
     private static string Join(IReadOnlyList<ProviderFailure> failures) =>
         string.Join(" and ", failures.Select(f => f.Label));
 
+    /// <summary>
+    /// Opens the item and marks it read: having opened the thread, the user has seen it, and on
+    /// GitHub the browser visit would mark it read anyway — this just means the tray badge
+    /// doesn't wait a poll to agree.
+    /// </summary>
     [RelayCommand]
-    private static void OpenItem(InboxItemViewModel? item)
+    private async Task OpenItemAsync(InboxItemViewModel? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        OpenUrl(item.WebUrl);
+        await MarkReadAsync(new[] { item.Item }).ConfigureAwait(true);
+    }
+
+    /// <summary>Marks one row read.</summary>
+    [RelayCommand]
+    private async Task MarkRead(InboxItemViewModel? item)
     {
         if (item is not null)
         {
-            OpenUrl(item.WebUrl);
+            await MarkReadAsync(new[] { item.Item }).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>Marks every item in one group read, addressed by the group's display name.</summary>
+    [RelayCommand]
+    private async Task MarkGroupRead(string? name)
+    {
+        if (name is null)
+        {
+            return;
+        }
+
+        var group = ItemsView.Groups?
+            .OfType<CollectionViewGroup>()
+            .FirstOrDefault(g => string.Equals(g.Name as string, name, StringComparison.OrdinalIgnoreCase));
+
+        if (group is null)
+        {
+            return;
+        }
+
+        await MarkReadAsync(group.Items.OfType<InboxItemViewModel>().Select(i => i.Item).ToList()).ConfigureAwait(true);
+    }
+
+    /// <summary>Marks everything currently in the inbox read.</summary>
+    [RelayCommand]
+    private async Task MarkAllRead() =>
+        await MarkReadAsync(Items.Select(i => i.Item).ToList()).ConfigureAwait(true);
+
+    /// <summary>
+    /// The one path all four mark-read gestures share. <see cref="InboxService"/> republishes the
+    /// snapshot, so the rebuild arrives through <see cref="InboxState.Changed"/> rather than
+    /// being forced here.
+    /// </summary>
+    private async Task MarkReadAsync(IReadOnlyCollection<InboxItem> items)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _inboxService.MarkAsReadAsync(items, CancellationToken.None).ConfigureAwait(true);
+
+            // Reuse the degraded-notice channel: it already survives re-renders, so a "reconnect
+            // this account" prompt doesn't vanish on the next render. Only ever set, never
+            // cleared here — clearing would wipe a provider-failure notice a refresh had put
+            // there, and the next refresh recomputes the field anyway.
+            if (result.Notices.Count > 0)
+            {
+                _degradedNotice = string.Join(" ", result.Notices);
+            }
+
+            Rebuild(force: true);
+        }
+        catch (Exception ex)
+        {
+            // The local mark is written before any network call, so the user's action is never
+            // lost — this only catches an unexpected failure in the write fan-out.
+            Debug.WriteLine($"Marking items read failed: {ex.Message}");
         }
     }
 
@@ -292,7 +374,7 @@ public sealed partial class InboxViewModel : ObservableObject
             // Hide read items unless the user opted to show them — but always keep a read item
             // that was updated recently, so a thread GitHub's REST API marks read (while the web
             // bell still flags it new) doesn't silently vanish from the list.
-            if (!settings.ShowReadItems && !item.IsUnread && !InboxRecency.IsRecent(item, now, recencyWindow))
+            if (!settings.ShowReadItems && !item.IsUnread && !InboxRecency.ShouldSurfaceRead(item, now, recencyWindow))
             {
                 continue;
             }
@@ -336,6 +418,7 @@ public sealed partial class InboxViewModel : ObservableObject
 
         var unread = Items.Count(i => i.IsUnread);
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(HasUnread));
         var status = Items.Count == 0
             ? "You're all caught up."
             : unread == 0

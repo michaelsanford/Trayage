@@ -14,6 +14,16 @@ namespace Trayage.Core.Tests;
 /// </summary>
 internal static class TestProviders
 {
+    /// <summary>
+    /// A read-state store over a throwaway temp file. Empty, so it's a pass-through overlay for
+    /// tests that don't care about read marks — and the real implementation, so tests that do
+    /// care exercise the actual eviction rules rather than a stand-in that restates them.
+    /// </summary>
+    public static IReadStateStore ReadState() =>
+        new JsonReadStateStore(
+            NullLogger<JsonReadStateStore>.Instance,
+            Path.Combine(Path.GetTempPath(), $"trayage-test-readstate-{Guid.NewGuid():N}.json"));
+
     /// <summary>A stub provider bound to an account id, returning <paramref name="items"/> on every fetch.</summary>
     public static IInboxProvider Provider(
         ProviderKind kind = ProviderKind.GitHub,

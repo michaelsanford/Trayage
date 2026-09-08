@@ -25,6 +25,13 @@ public static class TrayagePaths
 
     public static string SecretsFile => Path.Combine(DataDirectory, "secrets.dat");
 
+    /// <summary>
+    /// Locally-marked-read items. Kept out of <see cref="SettingsFile"/> because it's state
+    /// rather than configuration, and because Bitbucket marks — which have no server-side
+    /// equivalent to fall back on — live here indefinitely.
+    /// </summary>
+    public static string ReadStateFile => Path.Combine(DataDirectory, "read-state.json");
+
     public static string LogDirectory
     {
         get

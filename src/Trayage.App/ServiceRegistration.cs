@@ -31,6 +31,7 @@ internal static class ServiceRegistration
         builder.Services.AddSingleton<InboxAggregator>();
         builder.Services.AddSingleton<InboxDiffer>();
         builder.Services.AddSingleton<InboxState>();
+        builder.Services.AddSingleton<IReadStateStore, JsonReadStateStore>();
         builder.Services.AddSingleton<InboxService>();
 
         // Notifications & polling (Phase 5)

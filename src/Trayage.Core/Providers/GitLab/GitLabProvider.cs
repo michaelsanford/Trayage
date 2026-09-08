@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -286,6 +287,57 @@ public sealed class GitLabProvider : IInboxProvider
             _logger.LogWarning(ex, "Failed to refresh the GitLab access token.");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Marks the to-do done. Note this <em>removes</em> the item from the inbox rather than
+    /// dimming it: Trayage reads the pending to-do list, and a done to-do is no longer pending,
+    /// so the row disappears on the next poll. That's GitLab's model, not a choice here.
+    /// </summary>
+    public async Task<MarkAsReadOutcome> TryMarkAsReadAsync(InboxItem item, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        if (!IsConnected || !TryParseTodoId(item.Id, out var todoId))
+        {
+            return MarkAsReadOutcome.NotSupported;
+        }
+
+        var url = $"{ApiBase}/todos/{todoId}/mark_as_done";
+        using var response = await SendWithAuthAsync(
+            () => new HttpRequestMessage(HttpMethod.Post, url), cancellationToken).ConfigureAwait(false);
+
+        if (response is null)
+        {
+            return MarkAsReadOutcome.NotSupported;
+        }
+
+        // An account connected before Trayage asked for the write scope holds a read-only token,
+        // which GitLab rejects with 403. Surfacing that is the caller's job; the local mark still
+        // applies, so the feature degrades rather than breaking.
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            _logger.LogInformation("GitLab refused a to-do write; the account's token lacks the api scope.");
+            return MarkAsReadOutcome.NeedsReauthorization;
+        }
+
+        // 404 means the to-do is already done or gone — the desired state either way.
+        if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return MarkAsReadOutcome.Propagated;
+        }
+
+        _logger.LogWarning("GitLab returned {Status} marking a to-do done.", (int)response.StatusCode);
+        return MarkAsReadOutcome.NotSupported;
+    }
+
+    /// <summary>Recovers the numeric to-do id from the "todo:123" form GitLabMapping builds.</summary>
+    private static bool TryParseTodoId(string id, out long todoId)
+    {
+        const string prefix = "todo:";
+        todoId = 0;
+        return id.StartsWith(prefix, StringComparison.Ordinal) &&
+               long.TryParse(id.AsSpan(prefix.Length), CultureInfo.InvariantCulture, out todoId);
     }
 
     /// <summary>Sends an authenticated request, refreshing the access token once on 401.</summary>

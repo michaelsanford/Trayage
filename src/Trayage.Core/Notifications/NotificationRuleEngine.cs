@@ -37,7 +37,7 @@ public sealed class NotificationRuleEngine
         // so the flyout can mirror the full notifications feed. A read item is still eligible
         // when it was updated within the recency window (bridges GitHub's web-vs-REST read-state
         // desync); this relaxes the read gate only, not the kind/watched-repo rules below.
-        if (!item.IsUnread && !InboxRecency.IsRecent(item, now, recencyWindow))
+        if (!item.IsUnread && !InboxRecency.ShouldSurfaceRead(item, now, recencyWindow))
         {
             return false;
         }
