@@ -28,8 +28,9 @@ public sealed record MarkAsReadResult(int Count, IReadOnlyList<string> Notices);
 /// <summary>
 /// Performs a single inbox refresh cycle: queries every connected account, merges the
 /// results, and publishes them to <see cref="InboxState"/>. An account that throws is
-/// logged and skipped so one failing service can't blank the whole inbox. The polling
-/// service drives this on a timer; the UI can also call it for a manual refresh.
+/// logged and keeps its last-known items, so one failing service can neither blank its part
+/// of the inbox nor, on recovery, re-notify everything it had. The polling service drives
+/// this on a timer; the UI can also call it for a manual refresh.
 /// </summary>
 public sealed class InboxService(
     ProviderRegistry registry,
@@ -46,44 +47,70 @@ public sealed class InboxService(
     /// </summary>
     private const int MaxConcurrentMarkWrites = 4;
 
+    // Single-flight refresh bookkeeping; see RefreshAsync.
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private long _requested;
+    private long _lastCompletedCoverage;
+    private InboxRefreshResult? _lastResult;
+
     /// <summary>
     /// Fetches and publishes the current inbox, returning the merged snapshot along with any
     /// accounts that failed this cycle. Never throws for provider-level failures.
     /// </summary>
+    /// <remarks>
+    /// Refreshes never overlap. The poller, the tray's "Refresh now", and every repo toggle in
+    /// Settings all land here; run concurrently, a slower, older fetch could finish last and
+    /// publish a stale snapshot. A caller that arrives while a refresh is running waits for it,
+    /// then either reuses the result of a run that <em>started after it asked</em> (and so is
+    /// at least as fresh) or runs one itself — so a burst of ten requests costs two fetches.
+    /// </remarks>
     public async Task<InboxRefreshResult> RefreshAsync(CancellationToken cancellationToken)
+    {
+        var ticket = Interlocked.Increment(ref _requested);
+
+        await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_lastResult is not null && _lastCompletedCoverage >= ticket)
+            {
+                return _lastResult;
+            }
+
+            // This run reflects every request made up to now.
+            var coverage = Interlocked.Read(ref _requested);
+            var result = await RefreshCoreAsync(cancellationToken).ConfigureAwait(false);
+            _lastResult = result;
+            _lastCompletedCoverage = coverage;
+            return result;
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
+    }
+
+    private async Task<InboxRefreshResult> RefreshCoreAsync(CancellationToken cancellationToken)
     {
         // Read the registry per cycle, not once at construction, so an account connected a
         // moment ago is polled immediately rather than after a restart.
         var providers = registry.Active;
         var accounts = settings.Load().Accounts.ToDictionary(a => a.Id, StringComparer.Ordinal);
 
-        var perProvider = new List<IReadOnlyList<InboxItem>>(providers.Count);
-        var failures = new List<ProviderFailure>();
-
-        foreach (var provider in providers)
+        // Accounts are fetched in parallel (each provider instance owns its own session), so a
+        // cycle takes as long as the slowest account rather than all of them added together.
+        var outcomes = await Task.WhenAll(providers.Select(provider =>
         {
             // Watched repositories are scoped to the account: querying a repo with a token that
             // can't see it would just 404 every cycle.
             var watched = accounts.TryGetValue(provider.AccountId, out var account)
                 ? account.WatchedRepositories
                 : new List<string>();
+            return FetchAccountAsync(provider, new InboxQuery(watched), cancellationToken);
+        })).ConfigureAwait(false);
 
-            try
-            {
-                var items = await provider.FetchInboxAsync(new InboxQuery(watched), cancellationToken).ConfigureAwait(false);
-                perProvider.Add(items);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                failures.Add(new ProviderFailure(provider.AccountId, provider.Provider, provider.DisplayLabel));
-                logger.LogWarning(ex, "Account {AccountId} on {Provider} failed to fetch its inbox.",
-                    provider.AccountId, provider.Provider);
-            }
-        }
+        // Merged in registry order, so the result doesn't depend on which account answered first.
+        var perProvider = outcomes.Select(o => o.Items).ToList();
+        var failures = outcomes.Where(o => o.Failure is not null).Select(o => o.Failure!).ToList();
 
         // The overlay goes on here, before anything downstream sees the snapshot: the polling
         // service feeds these same items to the differ and the toast gate, so a locally-marked
@@ -92,6 +119,31 @@ public sealed class InboxService(
         var merged = readState.Apply(aggregator.Merge(perProvider));
         state.Set(merged);
         return new InboxRefreshResult(merged, failures);
+    }
+
+    private async Task<(IReadOnlyList<InboxItem> Items, ProviderFailure? Failure)> FetchAccountAsync(
+        IInboxProvider provider, InboxQuery query, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var items = await provider.FetchInboxAsync(query, cancellationToken).ConfigureAwait(false);
+            return (items, null);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Account {AccountId} on {Provider} failed to fetch its inbox.",
+                provider.AccountId, provider.Provider);
+
+            // Keep what this account last showed. Dropping it would empty the account's part of
+            // the inbox for the length of the outage, and the poller's differ would then see
+            // every one of those items as new — and notify — the moment the account recovers.
+            var lastKnown = state.Items.Where(i => i.AccountId == provider.AccountId).ToList();
+            return (lastKnown, new ProviderFailure(provider.AccountId, provider.Provider, provider.DisplayLabel));
+        }
     }
 
     /// <summary>
