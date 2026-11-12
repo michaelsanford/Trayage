@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -30,7 +31,8 @@ public sealed record RepositoryListResult(IReadOnlyList<RepositorySummary> Repos
 /// <summary>
 /// Bitbucket Cloud inbox provider. Bitbucket has no notification inbox and no device
 /// flow, so this authenticates with the authorization-code flow over a loopback redirect
-/// and assembles an inbox from per-watched-repo pull-request queries:
+/// and assembles an inbox from one open-pull-request query per watched repo, classifying
+/// each PR against the signed-in user (see <see cref="BitbucketMapping.Classify"/>):
 /// <list type="bullet">
 ///   <item>open PRs you authored → <see cref="InboxItemKind.Assignment"/>;</item>
 ///   <item>open PRs where you're a reviewer → <see cref="InboxItemKind.ReviewRequest"/>;</item>
@@ -52,14 +54,15 @@ public sealed class BitbucketProvider : IInboxProvider
     // authorization-code flow at a time; a second concurrent attempt would fail to bind.
     private static readonly SemaphoreSlim ConnectGate = new(1, 1);
 
+    /// <summary>Bitbucket's maximum page size for pull-request lists.</summary>
+    private const int PullRequestPageSize = 50;
+
     private readonly BitbucketOptions _options;
     private readonly ProviderAccountContext _account;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ISecretStore _secrets;
     private readonly ILogger<BitbucketProvider> _logger;
+    private readonly OAuthTokenSession _session;
 
-    private string? _accessToken;
-    private DateTimeOffset _accessExpiresUtc = DateTimeOffset.MinValue;
     private string? _userUuid;
     private string? _grantedScopes;
 
@@ -73,10 +76,14 @@ public sealed class BitbucketProvider : IInboxProvider
         _options = options.Value;
         _account = account;
         _httpClientFactory = httpClientFactory;
-        _secrets = secrets;
         _logger = logger;
+        _session = new OAuthTokenSession(account, secrets, httpClientFactory, RefreshAsync, logger);
 
-        RestoreSession();
+        if (_session.HasStoredSession)
+        {
+            IsConnected = true;
+            AccountLogin = _account.AccountLogin;
+        }
     }
 
     public ProviderKind Provider => ProviderKind.Bitbucket;
@@ -145,10 +152,14 @@ public sealed class BitbucketProvider : IInboxProvider
 
         try
         {
-            var authorizeUrl = new Uri($"{AuthorizeEndpoint}?client_id={Uri.EscapeDataString(_options.Key)}&response_type=code");
+            // The state value ties the callback to this attempt: without it, any local page could
+            // hit the listener with its own code and sign this account in as someone else.
+            var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
+            var authorizeUrl = new Uri(
+                $"{AuthorizeEndpoint}?client_id={Uri.EscapeDataString(_options.Key)}&response_type=code&state={state}");
             await openBrowser(authorizeUrl).ConfigureAwait(false);
 
-            var context = await listener.GetContextAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+            var context = await WaitForCallbackAsync(listener, state, cancellationToken).ConfigureAwait(false);
             var code = context.Request.QueryString["code"];
             var error = context.Request.QueryString["error"];
 
@@ -165,13 +176,13 @@ public sealed class BitbucketProvider : IInboxProvider
             }
 
             var token = await ExchangeCodeAsync(code, cancellationToken).ConfigureAwait(false);
-            StoreTokens(token);
+            _session.Store(token);
 
             var user = await GetCurrentUserAsync(cancellationToken).ConfigureAwait(false);
             _userUuid = user?.Uuid;
             AccountLogin = user?.Username ?? user?.DisplayName;
             IsConnected = true;
-            PersistConnectionState(connected: true, login: AccountLogin);
+            _account.PersistConnection(connected: true, login: AccountLogin);
             // Note: the account login is PII, so it is not written to the log.
             _logger.LogInformation("Connected to Bitbucket.");
         }
@@ -181,15 +192,34 @@ public sealed class BitbucketProvider : IInboxProvider
         }
     }
 
+    /// <summary>
+    /// Waits for the OAuth redirect that carries <paramref name="state"/>. Anything else that
+    /// reaches the loopback port (a stray or forged request) is answered and ignored.
+    /// </summary>
+    private async Task<HttpListenerContext> WaitForCallbackAsync(HttpListener listener, string state, CancellationToken ct)
+    {
+        while (true)
+        {
+            var context = await listener.GetContextAsync().WaitAsync(ct).ConfigureAwait(false);
+            if (string.Equals(context.Request.QueryString["state"], state, StringComparison.Ordinal))
+            {
+                return context;
+            }
+
+            _logger.LogWarning("Ignored a request on the Bitbucket OAuth callback that didn't carry this sign-in's state.");
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            context.Response.Close();
+        }
+    }
+
     public void Disconnect()
     {
         _account.PurgeSecrets();
-        _accessToken = null;
-        _accessExpiresUtc = DateTimeOffset.MinValue;
+        _session.Clear();
         _userUuid = null;
         IsConnected = false;
         AccountLogin = null;
-        PersistConnectionState(connected: false, login: null);
+        _account.PersistConnection(connected: false, login: null);
         _logger.LogInformation("Disconnected from Bitbucket.");
     }
 
@@ -200,42 +230,42 @@ public sealed class BitbucketProvider : IInboxProvider
             return Array.Empty<InboxItem>();
         }
 
-        var token = await GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
-        if (token is null)
-        {
-            return Array.Empty<InboxItem>();
-        }
-
-        var uuid = await EnsureUserUuidAsync(cancellationToken).ConfigureAwait(false);
-        if (uuid is null)
-        {
-            return Array.Empty<InboxItem>();
-        }
+        // Failing loudly (rather than returning an empty or partial list) matters here: the
+        // inbox would otherwise treat this account's items as gone, then notify for all of them
+        // again on recovery. A failure keeps the last-known items and reports the outage.
+        _ = await _session.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Couldn't authenticate with Bitbucket; the session may need reconnecting.");
+        var uuid = await EnsureUserUuidAsync(cancellationToken).ConfigureAwait(false)
+                   ?? throw new InvalidOperationException("Couldn't identify the signed-in Bitbucket user.");
 
         // Bitbucket retired the cross-repo "PRs for a user" endpoint (CHANGE-2770), so every
         // class of item — authored, review-requested, and general activity — is now sourced
         // per watched repo. A repo must therefore be watched for its PRs to surface.
-        var tasks = new List<Task<List<InboxItem>>>();
-
-        // Limit concurrent HTTP queries using a semaphore. 4 is a safe compromise between speed and rate limits.
+        // At most 4 repos in flight: a safe compromise between speed and rate limits.
         using var semaphore = new SemaphoreSlim(4);
-        foreach (var repo in query.WatchedRepositories)
+        var results = await Task.WhenAll(query.WatchedRepositories
+            .Select(repo => GetWatchedRepoAsync(repo, uuid, semaphore, cancellationToken))).ConfigureAwait(false);
+
+        var failed = results.Count(r => r.Failed);
+        if (failed > 0)
         {
-            tasks.Add(GetWatchedRepoAsync(repo, uuid, semaphore, cancellationToken));
+            throw new InvalidOperationException(
+                $"{failed} of {results.Length} watched Bitbucket repositories couldn't be fetched.");
         }
 
-        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
-
-        // Highest-priority kind wins when the same PR appears via multiple queries.
+        // A PR is keyed by repo + id, so the same PR can't come back twice from one query, but
+        // two watched names can resolve to the same repo; keep one of each.
         var byId = new Dictionary<string, InboxItem>(StringComparer.Ordinal);
-        foreach (var result in results)
+        foreach (var item in results.SelectMany(r => r.Items))
         {
-            foreach (var item in result)
-            {
-                Upsert(byId, item);
-            }
+            byId[item.Id] = item;
         }
 
+        _logger.LogDebug(
+            "Fetched {Count} Bitbucket pull request(s): {Reviews} review request(s), {Authored} authored.",
+            byId.Count,
+            byId.Values.Count(i => i.Kind == InboxItemKind.ReviewRequest),
+            byId.Values.Count(i => i.Kind == InboxItemKind.Assignment));
         return byId.Values.ToList();
     }
 
@@ -255,7 +285,7 @@ public sealed class BitbucketProvider : IInboxProvider
             return RepositoryListResult.Empty;
         }
 
-        var token = await GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
+        var token = await _session.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
         if (token is null)
         {
             _logger.LogWarning("Bitbucket repository listing skipped: no usable access token (refresh may have failed).");
@@ -298,7 +328,7 @@ public sealed class BitbucketProvider : IInboxProvider
             }
 
             var repositories = byName.Values
-                .OrderByDescending(r => BitbucketMapping.ParseTimestamp(r.UpdatedOn))
+                .OrderByDescending(r => ProviderTimestamp.Parse(r.UpdatedOn))
                 .Select(r => new RepositorySummary(r.FullName!, r.Name ?? r.FullName!))
                 .ToList();
 
@@ -414,7 +444,7 @@ public sealed class BitbucketProvider : IInboxProvider
     /// </summary>
     private async Task<(T? Data, bool Failed)> GetWithScopeCheckAsync<T>(string url, string scope, string consumerPermission, CancellationToken ct) where T : class
     {
-        using var response = await SendWithAuthAsync(() => new HttpRequestMessage(HttpMethod.Get, url), ct).ConfigureAwait(false);
+        using var response = await _session.SendAsync(() => new HttpRequestMessage(HttpMethod.Get, url), ct).ConfigureAwait(false);
         if (response is null)
         {
             _logger.LogWarning("Bitbucket GET {Url} produced no response (auth or network failure).", Redact(url));
@@ -441,33 +471,27 @@ public sealed class BitbucketProvider : IInboxProvider
         return (data, false);
     }
 
-    private async Task<List<InboxItem>> GetWatchedRepoAsync(string repo, string uuid, SemaphoreSlim semaphore, CancellationToken ct)
+    private readonly record struct WatchedRepoResult(List<InboxItem> Items, bool Failed);
+
+    /// <summary>
+    /// Every open PR in <paramref name="repo"/>, classified against the signed-in user. One query
+    /// covers all three kinds: <c>fields=+values.reviewers</c> adds the reviewer list the list
+    /// endpoint otherwise omits, so authored and review-requested PRs are told apart locally
+    /// instead of costing two extra filtered queries per repo.
+    /// </summary>
+    private async Task<WatchedRepoResult> GetWatchedRepoAsync(string repo, string uuid, SemaphoreSlim semaphore, CancellationToken ct)
     {
         await semaphore.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var list = new List<InboxItem>();
+            var url = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN&pagelen={PullRequestPageSize}" +
+                      $"&fields={Uri.EscapeDataString("+values.reviewers")}";
+            var (pullRequests, failed) = await GetAllPullRequestsAsync(url, ct).ConfigureAwait(false);
 
-            // Authored by me and review-requested of me are the specific classes; the Upsert
-            // priority means the most specific kind wins if a PR matches more than one query.
-            var authorUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN&q={Uri.EscapeDataString($"author.uuid=\"{uuid}\"")}";
-            foreach (var pr in await GetAllPullRequestsAsync(authorUrl, ct).ConfigureAwait(false))
-            {
-                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.Assignment, repo, AccountId));
-            }
-
-            var reviewerUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN&q={Uri.EscapeDataString($"reviewers.uuid=\"{uuid}\"")}";
-            foreach (var pr in await GetAllPullRequestsAsync(reviewerUrl, ct).ConfigureAwait(false))
-            {
-                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.ReviewRequest, repo, AccountId));
-            }
-
-            var allUrl = $"{ApiBase}/repositories/{repo}/pullrequests?state=OPEN";
-            foreach (var pr in await GetAllPullRequestsAsync(allUrl, ct).ConfigureAwait(false))
-            {
-                list.Add(BitbucketMapping.ToInboxItem(pr, InboxItemKind.RepoActivity, repo, AccountId));
-            }
-            return list;
+            var items = pullRequests
+                .Select(pr => BitbucketMapping.ToInboxItem(pr, BitbucketMapping.Classify(pr, uuid), repo, AccountId))
+                .ToList();
+            return new WatchedRepoResult(items, failed);
         }
         finally
         {
@@ -475,22 +499,12 @@ public sealed class BitbucketProvider : IInboxProvider
         }
     }
 
-    private static void Upsert(Dictionary<string, InboxItem> byId, InboxItem item)
-    {
-        if (!byId.TryGetValue(item.Id, out var existing) || Priority(item.Kind) > Priority(existing.Kind))
-        {
-            byId[item.Id] = item;
-        }
-    }
-
-    private static int Priority(InboxItemKind kind) => kind switch
-    {
-        InboxItemKind.ReviewRequest => 3,
-        InboxItemKind.Assignment => 2,
-        _ => 1,
-    };
-
-    private async Task<List<BitbucketPullRequest>> GetAllPullRequestsAsync(string url, CancellationToken ct)
+    /// <summary>
+    /// Follows pagination up to the page cap. <c>Failed</c> means a transient problem (auth,
+    /// network, 5xx, rate limiting) — the repo's PRs are unknown, not absent. A repo that's
+    /// gone or no longer visible (404/403) is permanent: it's logged and contributes nothing.
+    /// </summary>
+    private async Task<(List<BitbucketPullRequest> PullRequests, bool Failed)> GetAllPullRequestsAsync(string url, CancellationToken ct)
     {
         var results = new List<BitbucketPullRequest>();
         var next = url;
@@ -500,7 +514,29 @@ public sealed class BitbucketProvider : IInboxProvider
         {
             while (next is not null && page < MaxPagesPerQuery)
             {
-                var pageData = await GetApiAsync<BitbucketPagedPullRequests>(next, ct).ConfigureAwait(false);
+                var pageUrl = next;
+                using var response = await _session.SendAsync(() => new HttpRequestMessage(HttpMethod.Get, pageUrl), ct).ConfigureAwait(false);
+                if (response is null)
+                {
+                    _logger.LogWarning("Bitbucket query {Url} couldn't authenticate.", Redact(url));
+                    return (results, true);
+                }
+
+                if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden)
+                {
+                    _logger.LogWarning("Bitbucket query {Url} returned {Status}; is the watched repository still accessible?",
+                        Redact(url), (int)response.StatusCode);
+                    return (results, false);
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Bitbucket query {Url} returned {Status}.", Redact(url), (int)response.StatusCode);
+                    return (results, true);
+                }
+
+                await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                var pageData = await JsonSerializer.DeserializeAsync<BitbucketPagedPullRequests>(stream, cancellationToken: ct).ConfigureAwait(false);
                 if (pageData is null)
                 {
                     break;
@@ -515,39 +551,28 @@ public sealed class BitbucketProvider : IInboxProvider
             {
                 _logger.LogInformation("Bitbucket query {Url} has more pages than the {Max}-page cap; some items omitted.", Redact(url), MaxPagesPerQuery);
             }
+
+            return (results, false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "Bitbucket query failed: {Url}", Redact(url));
+            return (results, true);
         }
-
-        return results;
     }
 
-    /// <summary>
-    /// Strips a query string (which can carry <c>reviewers.uuid="…"</c>) and masks the
-    /// signed-in user's UUID in the path so log lines never leak that PII.
-    /// </summary>
-    private string Redact(string url)
+    /// <summary>Drops the query string so log lines carry only the endpoint path.</summary>
+    private static string Redact(string url)
     {
         var query = url.IndexOf('?');
-        var path = query >= 0 ? url[..query] : url;
-
-        if (_userUuid is { Length: > 0 })
-        {
-            path = path
-                .Replace(Uri.EscapeDataString(_userUuid), "{uuid}", StringComparison.Ordinal)
-                .Replace(_userUuid, "{uuid}", StringComparison.Ordinal);
-        }
-
-        return query >= 0 ? path + "?…" : path;
+        return query >= 0 ? url[..query] + "?…" : url;
     }
 
     private async Task<T?> GetApiAsync<T>(string url, CancellationToken ct) where T : class
     {
         // SendWithAuthAsync hands ownership to the caller, so we own disposal here.
         // Disposing the content stream alone would leak the HttpResponseMessage.
-        using var response = await SendWithAuthAsync(() => new HttpRequestMessage(HttpMethod.Get, url), ct).ConfigureAwait(false);
+        using var response = await _session.SendAsync(() => new HttpRequestMessage(HttpMethod.Get, url), ct).ConfigureAwait(false);
         if (response is null || !response.IsSuccessStatusCode)
         {
             return null;
@@ -568,39 +593,6 @@ public sealed class BitbucketProvider : IInboxProvider
         return Task.FromResult(MarkAsReadOutcome.NotSupported);
     }
 
-    /// <summary>Sends an authenticated request, refreshing the access token once on 401.</summary>
-    private async Task<HttpResponseMessage?> SendWithAuthAsync(Func<HttpRequestMessage> requestFactory, CancellationToken ct)
-    {
-        var token = await GetAccessTokenAsync(ct).ConfigureAwait(false);
-        if (token is null)
-        {
-            return null;
-        }
-
-        var client = _httpClientFactory.CreateClient();
-        var request = requestFactory();
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var response = await client.SendAsync(request, ct).ConfigureAwait(false);
-
-        if (response.StatusCode != HttpStatusCode.Unauthorized)
-        {
-            return response;
-        }
-
-        // Token may have expired between checks; force a refresh and retry once.
-        response.Dispose();
-        _accessExpiresUtc = DateTimeOffset.MinValue;
-        token = await GetAccessTokenAsync(ct).ConfigureAwait(false);
-        if (token is null)
-        {
-            return null;
-        }
-
-        var retry = requestFactory();
-        retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return await client.SendAsync(retry, ct).ConfigureAwait(false);
-    }
-
     private async Task<string?> EnsureUserUuidAsync(CancellationToken ct)
     {
         if (_userUuid is not null)
@@ -616,53 +608,22 @@ public sealed class BitbucketProvider : IInboxProvider
     private async Task<BitbucketUser?> GetCurrentUserAsync(CancellationToken ct) =>
         await GetApiAsync<BitbucketUser>($"{ApiBase}/user", ct).ConfigureAwait(false);
 
-    private async Task<string?> GetAccessTokenAsync(CancellationToken ct)
-    {
-        if (_accessToken is not null && _accessExpiresUtc > DateTimeOffset.UtcNow.AddSeconds(30))
-        {
-            return _accessToken;
-        }
-
-        var refreshToken = _secrets.Get(_account.RefreshTokenKey);
-        if (refreshToken is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            var token = await RefreshAsync(refreshToken, ct).ConfigureAwait(false);
-            StoreTokens(token);
-            return _accessToken;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "Failed to refresh the Bitbucket access token.");
-            return null;
-        }
-    }
-
-    private async Task<BitbucketTokenResponse> ExchangeCodeAsync(string code, CancellationToken ct)
-    {
-        var form = new Dictionary<string, string>
+    private Task<OAuthTokens> ExchangeCodeAsync(string code, CancellationToken ct) =>
+        PostTokenAsync(new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
             ["code"] = code,
-        };
-        return await PostTokenAsync(form, ct).ConfigureAwait(false);
-    }
+        }, ct);
 
-    private async Task<BitbucketTokenResponse> RefreshAsync(string refreshToken, CancellationToken ct)
-    {
-        var form = new Dictionary<string, string>
+    /// <summary>Redeems a refresh token. Throws on rejection; the session logs and absorbs it.</summary>
+    private async Task<OAuthTokens?> RefreshAsync(string refreshToken, CancellationToken ct) =>
+        await PostTokenAsync(new Dictionary<string, string>
         {
             ["grant_type"] = "refresh_token",
             ["refresh_token"] = refreshToken,
-        };
-        return await PostTokenAsync(form, ct).ConfigureAwait(false);
-    }
+        }, ct).ConfigureAwait(false);
 
-    private async Task<BitbucketTokenResponse> PostTokenAsync(Dictionary<string, string> form, CancellationToken ct)
+    private async Task<OAuthTokens> PostTokenAsync(Dictionary<string, string> form, CancellationToken ct)
     {
         var client = _httpClientFactory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, TokenEndpoint);
@@ -683,42 +644,14 @@ public sealed class BitbucketProvider : IInboxProvider
             throw new InvalidOperationException("Bitbucket returned an empty access token.");
         }
 
-        return token;
-    }
-
-    private void StoreTokens(BitbucketTokenResponse token)
-    {
-        _accessToken = token.AccessToken;
-        _accessExpiresUtc = DateTimeOffset.UtcNow.AddSeconds(Math.Max(token.ExpiresIn, 60));
-        _grantedScopes = token.Scopes;
-
         // The scopes are not secret and not PII, but they're the single best clue when an
         // API call 403s: a refresh keeps the scopes the token was first authorized with, so
         // this reveals whether a fresh re-authorization is needed to pick up consumer changes.
+        _grantedScopes = token.Scopes;
         _logger.LogInformation("Bitbucket token scopes: {Scopes}", string.IsNullOrEmpty(token.Scopes) ? "(none reported)" : token.Scopes);
 
-        if (!string.IsNullOrEmpty(token.AccessToken))
-        {
-            _secrets.Set(_account.AccessTokenKey, token.AccessToken);
-        }
-
-        if (!string.IsNullOrEmpty(token.RefreshToken))
-        {
-            _secrets.Set(_account.RefreshTokenKey, token.RefreshToken);
-        }
+        return new OAuthTokens(token.AccessToken, token.RefreshToken, token.ExpiresIn);
     }
-
-    private void RestoreSession()
-    {
-        if (_secrets.Contains(_account.RefreshTokenKey))
-        {
-            IsConnected = true;
-            AccountLogin = _account.AccountLogin;
-        }
-    }
-
-    private void PersistConnectionState(bool connected, string? login) =>
-        _account.PersistConnection(connected, login);
 
     private static async Task WriteBrowserResponseAsync(HttpListenerResponse response, bool success)
     {

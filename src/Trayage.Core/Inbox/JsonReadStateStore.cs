@@ -92,7 +92,8 @@ public sealed class JsonReadStateStore : IReadStateStore
             for (var i = 0; i < items.Count; i++)
             {
                 var item = items[i];
-                if (!marks.TryGetValue(item.StorageKey, out var mark))
+                var key = item.StorageKey; // computed on each access, so read it once
+                if (!marks.TryGetValue(key, out var mark))
                 {
                     continue;
                 }
@@ -102,7 +103,7 @@ public sealed class JsonReadStateStore : IReadStateStore
                     // The thread moved on after the mark: this is genuinely new activity, so the
                     // item goes back to whatever the provider says and the mark is spent. Leaving
                     // it would silence a real notification.
-                    marks.Remove(item.StorageKey);
+                    marks.Remove(key);
                     changed = true;
                     continue;
                 }
@@ -112,7 +113,7 @@ public sealed class JsonReadStateStore : IReadStateStore
 
                 if (now - mark.LastSeenUtc > TouchInterval)
                 {
-                    marks[item.StorageKey] = mark with { LastSeenUtc = now };
+                    marks[key] = mark with { LastSeenUtc = now };
                     changed = true;
                 }
             }
@@ -157,7 +158,7 @@ public sealed class JsonReadStateStore : IReadStateStore
                 ? new Dictionary<string, ReadMark>(StringComparer.Ordinal)
                 : new Dictionary<string, ReadMark>(loaded, StringComparer.Ordinal);
         }
-        catch (Exception ex) when (ex is JsonException or IOException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             // Losing read marks is a cosmetic setback, not worth failing a poll over.
             _logger.LogWarning(ex, "Failed to read read-state from {Path}; starting empty.", _filePath);
@@ -171,22 +172,12 @@ public sealed class JsonReadStateStore : IReadStateStore
 
         try
         {
-            var json = JsonSerializer.Serialize(marks, SerializerOptions);
-            var tempPath = _filePath + ".tmp";
-            File.WriteAllText(tempPath, json);
-
-            // File.Replace requires the destination to exist; fall back to Move on first save.
-            if (File.Exists(_filePath))
-            {
-                File.Replace(tempPath, _filePath, destinationBackupFileName: null);
-            }
-            else
-            {
-                File.Move(tempPath, _filePath);
-            }
+            AtomicFile.WriteAllText(_filePath, JsonSerializer.Serialize(marks, SerializerOptions));
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            // Unauthorized covers the file being held by antivirus or made read-only; letting it
+            // escape would fail the whole poll cycle (Apply runs inside RefreshAsync).
             // Keep the in-memory marks: the session stays correct even if the file didn't take.
             _logger.LogWarning(ex, "Failed to write read-state to {Path}.", _filePath);
         }

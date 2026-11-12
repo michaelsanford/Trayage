@@ -1,4 +1,3 @@
-using System.Globalization;
 using Trayage.Core.Models;
 
 namespace Trayage.Core.Providers.Bitbucket;
@@ -22,14 +21,27 @@ public static class BitbucketMapping
             RepositoryFullName = repo,
             Reason = kind.ToString(),
             WebUrl = webUrl,
-            UpdatedAt = ParseTimestamp(pr.UpdatedOn),
+            UpdatedAt = ProviderTimestamp.Parse(pr.UpdatedOn),
             IsUnread = true,
         };
     }
 
-    public static DateTimeOffset ParseTimestamp(string? value) =>
-        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
-            ? parsed
-            : DateTimeOffset.MinValue;
+    /// <summary>
+    /// How an open pull request relates to the signed-in user: a review request when they're
+    /// a reviewer, an assignment when they authored it, otherwise general repository activity.
+    /// Review requests win, since that's the item that's waiting on them.
+    /// </summary>
+    public static InboxItemKind Classify(BitbucketPullRequest pr, string userUuid)
+    {
+        if (pr.Reviewers?.Any(r => IsUser(r, userUuid)) == true)
+        {
+            return InboxItemKind.ReviewRequest;
+        }
+
+        return IsUser(pr.Author, userUuid) ? InboxItemKind.Assignment : InboxItemKind.RepoActivity;
+    }
+
+    // Bitbucket UUIDs are braced GUIDs ("{…}"); compare case-insensitively to be safe.
+    private static bool IsUser(BitbucketUser? user, string userUuid) =>
+        string.Equals(user?.Uuid, userUuid, StringComparison.OrdinalIgnoreCase);
 }

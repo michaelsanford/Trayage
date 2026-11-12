@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -27,11 +26,8 @@ public sealed class GitLabProvider : IInboxProvider
     private readonly GitLabOptions _options;
     private readonly ProviderAccountContext _account;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ISecretStore _secrets;
     private readonly ILogger<GitLabProvider> _logger;
-
-    private string? _accessToken;
-    private DateTimeOffset _accessExpiresUtc = DateTimeOffset.MinValue;
+    private readonly OAuthTokenSession _session;
 
     public GitLabProvider(
         IOptions<GitLabOptions> options,
@@ -43,10 +39,14 @@ public sealed class GitLabProvider : IInboxProvider
         _options = options.Value;
         _account = account;
         _httpClientFactory = httpClientFactory;
-        _secrets = secrets;
         _logger = logger;
+        _session = new OAuthTokenSession(account, secrets, httpClientFactory, RefreshAsync, logger);
 
-        RestoreSession();
+        if (_session.HasStoredSession)
+        {
+            IsConnected = true;
+            AccountLogin = _account.AccountLogin;
+        }
     }
 
     public ProviderKind Provider => ProviderKind.GitLab;
@@ -61,7 +61,10 @@ public sealed class GitLabProvider : IInboxProvider
 
     public TimeSpan? SuggestedPollInterval => null;
 
-    /// <summary>The account's own instance when set, else the app-wide default (gitlab.com).</summary>
+    /// <summary>
+    /// The account's own instance when set, else the app-wide default (gitlab.com). Reads the
+    /// settings file, so hot paths take it once per operation rather than per request.
+    /// </summary>
     private string InstanceUrl => (_account.BaseUrl is { Length: > 0 } url ? url : _options.BaseUrl).TrimEnd('/');
 
     private string DeviceAuthEndpoint => $"{InstanceUrl}/oauth/authorize_device";
@@ -96,12 +99,12 @@ public sealed class GitLabProvider : IInboxProvider
             TimeSpan.FromSeconds(device.ExpiresIn))).ConfigureAwait(false);
 
         var token = await PollForTokenAsync(device, cancellationToken).ConfigureAwait(false);
-        StoreTokens(token);
+        _session.Store(new OAuthTokens(token.AccessToken!, token.RefreshToken, token.ExpiresIn));
 
         var user = await GetCurrentUserAsync(cancellationToken).ConfigureAwait(false);
         AccountLogin = user?.Username;
         IsConnected = true;
-        PersistConnectionState(connected: true, login: AccountLogin);
+        _account.PersistConnection(connected: true, login: AccountLogin);
         // Note: the account login is PII, so it is not written to the log.
         _logger.LogInformation("Connected to GitLab.");
     }
@@ -109,11 +112,10 @@ public sealed class GitLabProvider : IInboxProvider
     public void Disconnect()
     {
         _account.PurgeSecrets();
-        _accessToken = null;
-        _accessExpiresUtc = DateTimeOffset.MinValue;
+        _session.Clear();
         IsConnected = false;
         AccountLogin = null;
-        PersistConnectionState(connected: false, login: null);
+        _account.PersistConnection(connected: false, login: null);
         _logger.LogInformation("Disconnected from GitLab.");
     }
 
@@ -124,18 +126,21 @@ public sealed class GitLabProvider : IInboxProvider
             return Array.Empty<InboxItem>();
         }
 
+        var apiBase = ApiBase;
         var items = new List<InboxItem>();
         var page = 1;
 
         while (page <= MaxPagesPerQuery)
         {
             // state defaults to "pending" — the actionable to-do inbox.
-            var url = $"{ApiBase}/todos?per_page=100&page={page}";
-            using var response = await SendWithAuthAsync(() => new HttpRequestMessage(HttpMethod.Get, url), cancellationToken).ConfigureAwait(false);
-            if (response is null || !response.IsSuccessStatusCode)
-            {
-                break;
-            }
+            var url = $"{apiBase}/todos?per_page=100&page={page}";
+            using var response = await _session.SendAsync(() => new HttpRequestMessage(HttpMethod.Get, url), cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Couldn't authenticate with GitLab; the session may need reconnecting.");
+
+            // Throw rather than return what we have: a short or empty list would read as "these
+            // to-dos are gone", and they'd all notify again once GitLab recovers. A failure lets
+            // the inbox keep this account's last-known items and report the outage instead.
+            response.EnsureSuccessStatusCode();
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             var todos = await JsonSerializer.DeserializeAsync<List<GitLabTodo>>(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -250,19 +255,9 @@ public sealed class GitLabProvider : IInboxProvider
         return (response.StatusCode, token);
     }
 
-    private async Task<string?> GetAccessTokenAsync(CancellationToken ct)
+    /// <summary>Redeems a refresh token; <c>null</c> when GitLab rejects it.</summary>
+    private async Task<OAuthTokens?> RefreshAsync(string refreshToken, CancellationToken ct)
     {
-        if (_accessToken is not null && _accessExpiresUtc > DateTimeOffset.UtcNow.AddSeconds(30))
-        {
-            return _accessToken;
-        }
-
-        var refreshToken = _secrets.Get(_account.RefreshTokenKey);
-        if (refreshToken is null)
-        {
-            return null;
-        }
-
         var form = new Dictionary<string, string>
         {
             ["grant_type"] = "refresh_token",
@@ -270,23 +265,14 @@ public sealed class GitLabProvider : IInboxProvider
             ["client_id"] = _options.ApplicationId,
         };
 
-        try
+        var (status, token) = await PostTokenFormAsync(form, ct).ConfigureAwait(false);
+        if (status != HttpStatusCode.OK || string.IsNullOrEmpty(token?.AccessToken))
         {
-            var (status, token) = await PostTokenFormAsync(form, ct).ConfigureAwait(false);
-            if (status != HttpStatusCode.OK || string.IsNullOrEmpty(token?.AccessToken))
-            {
-                _logger.LogWarning("Failed to refresh the GitLab access token ({Status}).", status);
-                return null;
-            }
-
-            StoreTokens(token);
-            return _accessToken;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "Failed to refresh the GitLab access token.");
+            _logger.LogWarning("Failed to refresh the GitLab access token ({Status}).", status);
             return null;
         }
+
+        return new OAuthTokens(token.AccessToken, token.RefreshToken, token.ExpiresIn);
     }
 
     /// <summary>
@@ -304,7 +290,7 @@ public sealed class GitLabProvider : IInboxProvider
         }
 
         var url = $"{ApiBase}/todos/{todoId}/mark_as_done";
-        using var response = await SendWithAuthAsync(
+        using var response = await _session.SendAsync(
             () => new HttpRequestMessage(HttpMethod.Post, url), cancellationToken).ConfigureAwait(false);
 
         if (response is null)
@@ -340,42 +326,10 @@ public sealed class GitLabProvider : IInboxProvider
                long.TryParse(id.AsSpan(prefix.Length), CultureInfo.InvariantCulture, out todoId);
     }
 
-    /// <summary>Sends an authenticated request, refreshing the access token once on 401.</summary>
-    private async Task<HttpResponseMessage?> SendWithAuthAsync(Func<HttpRequestMessage> requestFactory, CancellationToken ct)
-    {
-        var token = await GetAccessTokenAsync(ct).ConfigureAwait(false);
-        if (token is null)
-        {
-            return null;
-        }
-
-        var client = _httpClientFactory.CreateClient();
-        var request = requestFactory();
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var response = await client.SendAsync(request, ct).ConfigureAwait(false);
-
-        if (response.StatusCode != HttpStatusCode.Unauthorized)
-        {
-            return response;
-        }
-
-        // Token may have expired between checks; force a refresh and retry once.
-        response.Dispose();
-        _accessExpiresUtc = DateTimeOffset.MinValue;
-        token = await GetAccessTokenAsync(ct).ConfigureAwait(false);
-        if (token is null)
-        {
-            return null;
-        }
-
-        var retry = requestFactory();
-        retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return await client.SendAsync(retry, ct).ConfigureAwait(false);
-    }
-
     private async Task<GitLabUser?> GetCurrentUserAsync(CancellationToken ct)
     {
-        using var response = await SendWithAuthAsync(() => new HttpRequestMessage(HttpMethod.Get, $"{ApiBase}/user"), ct).ConfigureAwait(false);
+        var url = $"{ApiBase}/user";
+        using var response = await _session.SendAsync(() => new HttpRequestMessage(HttpMethod.Get, url), ct).ConfigureAwait(false);
         if (response is null || !response.IsSuccessStatusCode)
         {
             return null;
@@ -384,32 +338,4 @@ public sealed class GitLabProvider : IInboxProvider
         await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         return await JsonSerializer.DeserializeAsync<GitLabUser>(stream, cancellationToken: ct).ConfigureAwait(false);
     }
-
-    private void StoreTokens(GitLabTokenResponse token)
-    {
-        _accessToken = token.AccessToken;
-        _accessExpiresUtc = DateTimeOffset.UtcNow.AddSeconds(Math.Max(token.ExpiresIn, 60));
-
-        if (!string.IsNullOrEmpty(token.AccessToken))
-        {
-            _secrets.Set(_account.AccessTokenKey, token.AccessToken);
-        }
-
-        if (!string.IsNullOrEmpty(token.RefreshToken))
-        {
-            _secrets.Set(_account.RefreshTokenKey, token.RefreshToken);
-        }
-    }
-
-    private void RestoreSession()
-    {
-        if (_secrets.Contains(_account.RefreshTokenKey))
-        {
-            IsConnected = true;
-            AccountLogin = _account.AccountLogin;
-        }
-    }
-
-    private void PersistConnectionState(bool connected, string? login) =>
-        _account.PersistConnection(connected, login);
 }

@@ -124,6 +124,16 @@ public sealed class BitbucketPullRequest
 
     [JsonPropertyName("destination")]
     public BitbucketPullRequestEndpoint? Destination { get; init; }
+
+    [JsonPropertyName("author")]
+    public BitbucketUser? Author { get; init; }
+
+    /// <summary>
+    /// Omitted from the list endpoint's default response; requested explicitly with
+    /// <c>fields=+values.reviewers</c>. Null when the field wasn't returned.
+    /// </summary>
+    [JsonPropertyName("reviewers")]
+    public List<BitbucketUser>? Reviewers { get; init; }
 }
 
 public sealed class BitbucketPullRequestEndpoint

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -44,11 +43,7 @@ public sealed class BitbucketProviderListReposTests
 
     private BitbucketProvider NewProvider(Func<HttpRequestMessage, HttpResponseMessage> route)
     {
-        var handler = new RoutingHandler(route);
-        var client = new HttpClient(handler);
-        var factory = Substitute.For<IHttpClientFactory>();
-        factory.CreateClient(Arg.Any<string>()).Returns(client);
-
+        var factory = TestHttp.Factory(route);
         var options = Options.Create(new BitbucketOptions { Key = "k", Secret = "s" });
         return new BitbucketProvider(options, _account, factory, _secrets, NullLogger<BitbucketProvider>.Instance);
     }
@@ -118,12 +113,5 @@ public sealed class BitbucketProviderListReposTests
     private static bool IsToken(HttpRequestMessage req) =>
         req.RequestUri!.AbsoluteUri.StartsWith(TokenUrl, StringComparison.Ordinal);
 
-    private static HttpResponseMessage Json(HttpStatusCode status, string body) =>
-        new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
-
-    private sealed class RoutingHandler(Func<HttpRequestMessage, HttpResponseMessage> route) : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            => Task.FromResult(route(request));
-    }
+    private static HttpResponseMessage Json(HttpStatusCode status, string body) => TestHttp.Json(status, body);
 }

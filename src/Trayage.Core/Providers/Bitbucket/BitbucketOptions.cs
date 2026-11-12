@@ -14,6 +14,11 @@ public sealed class BitbucketOptions
 
     public string Secret { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Informational only: Bitbucket grants whatever permissions the OAuth consumer is
+    /// configured with and ignores a requested scope, so this is never sent. It documents the
+    /// permissions the consumer needs (see the README).
+    /// </summary>
     public IList<string> Scopes { get; set; } = new List<string> { "account", "repository", "pullrequest" };
 
     /// <summary>

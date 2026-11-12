@@ -70,11 +70,4 @@ public sealed class GitLabMappingTests
         Assert.Equal("(no title)", fallback.Title);
         Assert.Equal("unknown/unknown", fallback.RepositoryFullName);
     }
-
-    [Fact]
-    public void ParseTimestamp_InvalidValue_ReturnsMinValue()
-    {
-        Assert.Equal(DateTimeOffset.MinValue, GitLabMapping.ParseTimestamp("not-a-date"));
-        Assert.Equal(DateTimeOffset.MinValue, GitLabMapping.ParseTimestamp(null));
-    }
 }

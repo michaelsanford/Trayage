@@ -39,11 +39,4 @@ public sealed class BitbucketMappingTests
         Assert.Equal("https://bitbucket.org/acme/widgets/pull-requests/7", item.WebUrl);
         Assert.Equal("Pull request #7", item.Title);
     }
-
-    [Fact]
-    public void ParseTimestamp_InvalidValue_ReturnsMinValue()
-    {
-        Assert.Equal(DateTimeOffset.MinValue, BitbucketMapping.ParseTimestamp("not-a-date"));
-        Assert.Equal(DateTimeOffset.MinValue, BitbucketMapping.ParseTimestamp(null));
-    }
 }

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -89,11 +88,11 @@ public sealed class GitHubProvider : IInboxProvider
         _secrets.Set(_account.AccessTokenKey, token.AccessToken);
         _client.Credentials = new Credentials(token.AccessToken);
 
-        var user = await _client.User.Current().ConfigureAwait(false);
+        var user = await _client.User.Current().WaitAsync(cancellationToken).ConfigureAwait(false);
         AccountLogin = user.Login;
         IsConnected = true;
 
-        PersistConnectionState(connected: true, login: user.Login);
+        _account.PersistConnection(connected: true, login: user.Login);
         // Note: the account login is PII, so it is not written to the log.
         _logger.LogInformation("Connected to GitHub.");
     }
@@ -104,7 +103,7 @@ public sealed class GitHubProvider : IInboxProvider
         _client.Credentials = Credentials.Anonymous;
         IsConnected = false;
         AccountLogin = null;
-        PersistConnectionState(connected: false, login: null);
+        _account.PersistConnection(connected: false, login: null);
         _logger.LogInformation("Disconnected from GitHub.");
     }
 
@@ -118,8 +117,11 @@ public sealed class GitHubProvider : IInboxProvider
         // Read and unread, mirroring the GitHub notifications inbox; the unread flag drives
         // the read/unread mark in the UI and gates toasts.
         var request = new NotificationsRequest { All = true };
+        // Octokit's calls take no CancellationToken; WaitAsync at least stops us waiting on
+        // them, so shutdown and a cancelled refresh return promptly.
         var notifications = await _client.Activity.Notifications
             .GetAllForCurrent(request)
+            .WaitAsync(cancellationToken)
             .ConfigureAwait(false);
 
         _logger.LogDebug("Fetched {Count} GitHub notification(s).", notifications.Count);
@@ -158,6 +160,7 @@ public sealed class GitHubProvider : IInboxProvider
 
         var status = await _client.Connection
             .Patch(new Uri($"notifications/threads/{Uri.EscapeDataString(item.Id)}", UriKind.Relative))
+            .WaitAsync(cancellationToken)
             .ConfigureAwait(false);
 
         // 403 would mean the token predates the notifications scope; everything else non-2xx is
@@ -187,16 +190,10 @@ public sealed class GitHubProvider : IInboxProvider
             RepositoryFullName = n.Repository?.FullName ?? "unknown/unknown",
             Reason = n.Reason ?? string.Empty,
             WebUrl = webUrl,
-            UpdatedAt = ParseTimestamp(n.UpdatedAt),
+            UpdatedAt = ProviderTimestamp.Parse(n.UpdatedAt),
             IsUnread = n.Unread,
         };
     }
-
-    private static DateTimeOffset ParseTimestamp(string? value) =>
-        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
-            ? parsed
-            : DateTimeOffset.MinValue;
 
     private void RestoreSession()
     {
@@ -210,7 +207,4 @@ public sealed class GitHubProvider : IInboxProvider
         IsConnected = true;
         AccountLogin = _account.AccountLogin;
     }
-
-    private void PersistConnectionState(bool connected, string? login) =>
-        _account.PersistConnection(connected, login);
 }

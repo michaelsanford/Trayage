@@ -57,11 +57,59 @@ public sealed class DpapiSecretStoreTests : IDisposable
         Assert.Equal("r3fr3sh", NewStore().Get("refresh"));
     }
 
+    [Fact]
+    public void CorruptFile_IsMovedAside_AndStoreStartsEmpty()
+    {
+        File.WriteAllText(_path, "{ not json");
+        var store = NewStore();
+
+        Assert.Null(store.Get("anything"));
+        store.Set("k", "v");
+
+        Assert.Equal("v", NewStore().Get("k"));
+        var quarantined = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(_path)!, Path.GetFileName(_path) + ".corrupt-*"));
+        Assert.Equal("{ not json", File.ReadAllText(quarantined));
+    }
+
+    [Fact]
+    public void Set_WhenFileIsLocked_ThrowsInsteadOfDroppingOtherSecrets()
+    {
+        var store = NewStore();
+        store.Set("a", "1");
+
+        // A fresh instance has nothing cached, so it must read the (locked) file before writing.
+        var other = NewStore();
+        using (new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.ThrowsAny<IOException>(() => other.Set("b", "2"));
+        }
+
+        Assert.Equal("1", NewStore().Get("a"));
+    }
+
+    [Fact]
+    public void Get_UsesCachedMap_AfterFirstRead()
+    {
+        var store = NewStore();
+        store.Set("k", "v");
+
+        // The process is the only writer, so once loaded the store doesn't need the file.
+        using (new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Equal("v", store.Get("k"));
+        }
+    }
+
     public void Dispose()
     {
         if (File.Exists(_path))
         {
             File.Delete(_path);
+        }
+
+        foreach (var file in Directory.GetFiles(Path.GetDirectoryName(_path)!, Path.GetFileName(_path) + ".*"))
+        {
+            File.Delete(file);
         }
     }
 }

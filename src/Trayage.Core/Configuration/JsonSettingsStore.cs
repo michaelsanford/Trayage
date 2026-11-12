@@ -63,19 +63,7 @@ public sealed class JsonSettingsStore(ILogger<JsonSettingsStore> logger, string?
 
         lock (_gate)
         {
-            var json = JsonSerializer.Serialize(settings, SerializerOptions);
-            var tempPath = _filePath + ".tmp";
-            File.WriteAllText(tempPath, json);
-
-            // File.Replace requires the destination to exist; fall back to Move on first save.
-            if (File.Exists(_filePath))
-            {
-                File.Replace(tempPath, _filePath, destinationBackupFileName: null);
-            }
-            else
-            {
-                File.Move(tempPath, _filePath);
-            }
+            AtomicFile.WriteAllText(_filePath, JsonSerializer.Serialize(settings, SerializerOptions));
 
             // Refresh the cache from what we just wrote so the next Load() is a hit.
             _cache = settings.Clone();
