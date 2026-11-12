@@ -23,6 +23,8 @@ public sealed class DpapiSecretStore(ILogger<DpapiSecretStore> logger, string? f
     private readonly string _filePath = filePath ?? TrayagePaths.SecretsFile;
     private readonly Lock _gate = new();
 
+    private Dictionary<string, string>? _map;
+
     public void Set(string key, string value)
     {
         ArgumentException.ThrowIfNullOrEmpty(key);
@@ -30,7 +32,8 @@ public sealed class DpapiSecretStore(ILogger<DpapiSecretStore> logger, string? f
 
         lock (_gate)
         {
-            var map = Read();
+            // Mutate a copy so a failed write leaves the cache matching what's on disk.
+            var map = new Dictionary<string, string>(Read(), StringComparer.Ordinal);
             var cipher = ProtectedData.Protect(Encoding.UTF8.GetBytes(value), Entropy, DataProtectionScope.CurrentUser);
             map[key] = Convert.ToBase64String(cipher);
             Write(map);
@@ -43,7 +46,7 @@ public sealed class DpapiSecretStore(ILogger<DpapiSecretStore> logger, string? f
 
         lock (_gate)
         {
-            var map = Read();
+            var map = TryRead();
             if (!map.TryGetValue(key, out var base64))
             {
                 return null;
@@ -68,7 +71,7 @@ public sealed class DpapiSecretStore(ILogger<DpapiSecretStore> logger, string? f
 
         lock (_gate)
         {
-            var map = Read();
+            var map = new Dictionary<string, string>(Read(), StringComparer.Ordinal);
             if (map.Remove(key))
             {
                 Write(map);
@@ -82,43 +85,83 @@ public sealed class DpapiSecretStore(ILogger<DpapiSecretStore> logger, string? f
 
         lock (_gate)
         {
-            return Read().ContainsKey(key);
+            return TryRead().ContainsKey(key);
         }
     }
 
+    /// <summary>
+    /// The key → ciphertext map (values are decrypted on demand), read once and cached: this process
+    /// is the only writer, and token refreshes and session restores call in here often.
+    /// </summary>
     private Dictionary<string, string> Read()
     {
+        if (_map is not null)
+        {
+            return _map;
+        }
+
         if (!File.Exists(_filePath))
         {
-            return new Dictionary<string, string>(StringComparer.Ordinal);
+            return _map = new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        string json;
+        try
+        {
+            json = File.ReadAllText(_filePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Transient (locked by AV, a sync client…): don't cache, and let the caller fail.
+            // Returning an empty map here would let the next Set() overwrite every other
+            // account's tokens with a one-entry file.
+            logger.LogWarning(ex, "Secrets file at {Path} could not be read.", _filePath);
+            throw;
         }
 
         try
         {
-            var json = File.ReadAllText(_filePath);
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(json)
-                   ?? new Dictionary<string, string>(StringComparer.Ordinal);
+            var loaded = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            return _map = loaded is null
+                ? new Dictionary<string, string>(StringComparer.Ordinal)
+                : new Dictionary<string, string>(loaded, StringComparer.Ordinal);
         }
-        catch (Exception ex) when (ex is JsonException or IOException)
+        catch (JsonException ex)
         {
-            logger.LogWarning(ex, "Secrets file at {Path} was unreadable; starting empty.", _filePath);
-            return new Dictionary<string, string>(StringComparer.Ordinal);
+            // Genuinely corrupt: keep the bytes for diagnosis, then start empty. Accounts will
+            // need to reconnect, but a later Set() can no longer destroy anything recoverable.
+            var quarantine = $"{_filePath}.corrupt-{DateTime.UtcNow:yyyyMMddHHmmss}";
+            logger.LogWarning(ex, "Secrets file at {Path} was corrupt; moved it to {Quarantine} and starting empty.", _filePath, quarantine);
+            try
+            {
+                File.Move(_filePath, quarantine, overwrite: true);
+            }
+            catch (Exception moveEx) when (moveEx is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(moveEx, "Could not move the corrupt secrets file aside.");
+                throw;
+            }
+
+            return _map = new Dictionary<string, string>(StringComparer.Ordinal);
         }
     }
 
     private void Write(Dictionary<string, string> map)
     {
-        var json = JsonSerializer.Serialize(map);
-        var tempPath = _filePath + ".tmp";
-        File.WriteAllText(tempPath, json);
+        AtomicFile.WriteAllText(_filePath, JsonSerializer.Serialize(map));
+        _map = map;
+    }
 
-        if (File.Exists(_filePath))
+    /// <summary>For the read-only paths: an unreadable file means "no secret", not a crash.</summary>
+    private Dictionary<string, string> TryRead()
+    {
+        try
         {
-            File.Replace(tempPath, _filePath, destinationBackupFileName: null);
+            return Read();
         }
-        else
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            File.Move(tempPath, _filePath);
+            return new Dictionary<string, string>(StringComparer.Ordinal);
         }
     }
 }

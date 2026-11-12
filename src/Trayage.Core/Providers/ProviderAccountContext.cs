@@ -6,8 +6,8 @@ namespace Trayage.Core.Providers;
 
 /// <summary>
 /// Binds a provider instance to the one account it serves: where its tokens live, which row of
-/// <see cref="TrayageSettings.Accounts"/> it reads and writes, and which repositories it watches.
-/// Providers hold one of these instead of reaching for a fixed per-provider settings slot, which
+/// <see cref="TrayageSettings.Accounts"/> it reads and writes. Providers hold one of these instead
+/// of reaching for a fixed per-provider settings slot, which
 /// is what lets several accounts of the same provider run side by side.
 /// </summary>
 public sealed class ProviderAccountContext(
@@ -25,6 +25,7 @@ public sealed class ProviderAccountContext(
     public string RefreshTokenKey => SecretKeys.RefreshToken(Provider, AccountId);
 
     /// <summary>This account's persisted row, or null once it has been removed.</summary>
+    /// <remarks>Each call reads (and clones) the settings, so take values once per operation.</remarks>
     public ProviderAccount? Load() => settings.Load().FindAccount(AccountId);
 
     public string? AccountLogin => Load()?.AccountLogin;
@@ -34,10 +35,6 @@ public sealed class ProviderAccountContext(
 
     /// <summary>The instance this account lives on, or null for the provider's public cloud.</summary>
     public string? BaseUrl => Load()?.BaseUrl;
-
-    /// <summary>Repositories watched by <em>this</em> account, not the app as a whole.</summary>
-    public IReadOnlyList<string> WatchedRepositories =>
-        Load()?.WatchedRepositories ?? (IReadOnlyList<string>)Array.Empty<string>();
 
     /// <summary>
     /// Records the outcome of a connect/disconnect. Re-loads first so a concurrent settings

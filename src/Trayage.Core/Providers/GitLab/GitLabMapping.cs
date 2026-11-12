@@ -1,4 +1,3 @@
-using System.Globalization;
 using Trayage.Core.Models;
 
 namespace Trayage.Core.Providers.GitLab;
@@ -40,15 +39,9 @@ public static class GitLabMapping
             RepositoryFullName = repo,
             Reason = todo.ActionName ?? string.Empty,
             WebUrl = todo.TargetUrl ?? $"https://gitlab.com/{repo}",
-            UpdatedAt = ParseTimestamp(todo.UpdatedAt),
+            UpdatedAt = ProviderTimestamp.Parse(todo.UpdatedAt),
             // Every pending to-do is an open action item, so it always counts as unread.
             IsUnread = true,
         };
     }
-
-    public static DateTimeOffset ParseTimestamp(string? value) =>
-        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
-            ? parsed
-            : DateTimeOffset.MinValue;
 }
