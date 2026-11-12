@@ -256,7 +256,14 @@ public partial class App
     /// The user-initiated teardown (tray ▸ Quit). Windows shutdown does not come through here —
     /// see <see cref="OnSessionEnding"/> — so this path can afford to be graceful.
     /// </summary>
-    protected override async void OnExit(ExitEventArgs e)
+    /// <remarks>
+    /// Deliberately synchronous. WPF tears the process down as soon as this returns, so an
+    /// <c>async void</c> override's continuation after its first await — disposing the host and
+    /// the mutex — never ran. The host is stopped on the thread pool and waited for with a
+    /// deadline: blocking the UI thread on it directly could deadlock against anything the
+    /// stopping services marshal to the dispatcher.
+    /// </remarks>
+    protected override void OnExit(ExitEventArgs e)
     {
         // Only the primary instance registered, so only it unregisters — a second instance
         // calling Unregister() would tear down the running instance's COM activator.
@@ -267,20 +274,21 @@ public partial class App
 
         _tray?.Unregister();
 
-        if (_host is not null)
+        if (_host is { } host)
         {
             try
             {
                 // InboxPollingService honours its stopping token on both the poll and the
                 // delay, so it stops promptly; a longer timeout would only mask a hang.
-                await _host.StopAsync(TimeSpan.FromSeconds(2));
+                var stopped = Task.Run(() => host.StopAsync(TimeSpan.FromSeconds(2))).Wait(TimeSpan.FromSeconds(3));
+                _logger.LogInformation(stopped ? "Host stopped." : "Host didn't stop within 3 s; exiting anyway.");
             }
             catch (Exception ex)
             {
                 CrashLog.Write("HostStop", ex);
             }
 
-            _host.Dispose();
+            host.Dispose();
         }
 
         _singleInstanceMutex?.Dispose();

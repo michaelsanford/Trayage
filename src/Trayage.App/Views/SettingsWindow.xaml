@@ -236,7 +236,7 @@
                         <!-- GitHub and GitLab: what used to be whole informational tabs. Their
                              inboxes are server-side, so the controls live on the provider. -->
                         <StackPanel Visibility="{Binding SupportsRepoPicker, Converter={StaticResource InverseBoolToVisibility}}">
-                            <TextBlock x:Name="ServerSideHeader" Text="Where this inbox comes from" Style="{StaticResource SectionHeaderTextStyle}" />
+                            <TextBlock Text="Where this inbox comes from" Style="{StaticResource SectionHeaderTextStyle}" />
                             <TextBlock x:Name="ServerSideBlurb"
                                        Text="Your GitHub items mirror your GitHub notifications inbox. To choose which repositories notify you, manage watching and notification preferences on GitHub itself — Trayage shows whatever GitHub delivers."
                                        Style="{StaticResource CaptionTextStyle}"
@@ -503,7 +503,7 @@
                                 <!-- The readout tracks the thumb live, but the value is only saved
                                      (and previewed) once the drag ends — otherwise every pixel of
                                      travel rewrote settings.json and replayed the sound. -->
-                                <Slider x:Name="VolumeSlider"
+                                <Slider
                                         Grid.Column="0"
                                         Minimum="0"
                                         Maximum="100"

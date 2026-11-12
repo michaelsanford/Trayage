@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using Trayage.Core.Configuration;
 using Trayage.Core.Inbox;
 using Trayage.Core.Models;
@@ -17,6 +18,10 @@ public sealed partial class InboxViewModel : ObservableObject
     private readonly InboxService _inboxService;
     private readonly InboxState _state;
     private readonly ISettingsStore _settings;
+    private readonly ILogger<InboxViewModel> _logger;
+
+    // 1 while a rebuild is queued on the dispatcher, so a burst of snapshot changes renders once.
+    private int _rebuildQueued;
 
     private DateTime _lastRefreshedAtUtc = DateTime.MinValue;
     private static readonly TimeSpan AutoRefreshThreshold = TimeSpan.FromSeconds(15);
@@ -27,14 +32,15 @@ public sealed partial class InboxViewModel : ObservableObject
     [ObservableProperty]
     private string _statusText = string.Empty;
 
-    public InboxViewModel(InboxService inboxService, InboxState state, ISettingsStore settings)
+    public InboxViewModel(InboxService inboxService, InboxState state, ISettingsStore settings, ILogger<InboxViewModel> logger)
     {
         _inboxService = inboxService;
         _state = state;
         _settings = settings;
+        _logger = logger;
         ItemsView = CollectionViewSource.GetDefaultView(Items);
         _state.Changed += OnStateChanged;
-        Rebuild();
+        Rebuild(force: false);
     }
 
     /// <summary>Raised when the user clicks the settings button in the flyout.</summary>
@@ -46,7 +52,9 @@ public sealed partial class InboxViewModel : ObservableObject
     /// </summary>
     public async Task OnFlyoutOpenedAsync()
     {
-        Application.Current?.Dispatcher.Invoke(() => Rebuild(force: true));
+        // Forced so every row's relative time and recency bucket is recomputed; between
+        // openings, rows that didn't change aren't re-rendered.
+        Rebuild(force: true);
 
         if (!IsRefreshing && DateTime.UtcNow - _lastRefreshedAtUtc >= AutoRefreshThreshold)
         {
@@ -126,7 +134,10 @@ public sealed partial class InboxViewModel : ObservableObject
             _degradedNotice = result.Failures.Count == 0
                 ? null
                 : $"Couldn't reach {Join(result.Failures)} — this list may be incomplete.";
-            Rebuild(force: true);
+
+            // The items themselves arrive through InboxState.Changed; only the status line
+            // depends on the notice set here.
+            UpdateStatus();
         }
         finally
         {
@@ -193,7 +204,7 @@ public sealed partial class InboxViewModel : ObservableObject
     /// <summary>
     /// The one path all four mark-read gestures share. <see cref="InboxService"/> republishes the
     /// snapshot, so the rebuild arrives through <see cref="InboxState.Changed"/> rather than
-    /// being forced here.
+    /// being done here.
     /// </summary>
     private async Task MarkReadAsync(IReadOnlyCollection<InboxItem> items)
     {
@@ -213,15 +224,14 @@ public sealed partial class InboxViewModel : ObservableObject
             if (result.Notices.Count > 0)
             {
                 _degradedNotice = string.Join(" ", result.Notices);
+                UpdateStatus();
             }
-
-            Rebuild(force: true);
         }
         catch (Exception ex)
         {
             // The local mark is written before any network call, so the user's action is never
             // lost — this only catches an unexpected failure in the write fan-out.
-            Debug.WriteLine($"Marking items read failed: {ex.Message}");
+            _logger.LogWarning(ex, "Marking {Count} item(s) read failed.", items.Count);
         }
     }
 
@@ -251,11 +261,29 @@ public sealed partial class InboxViewModel : ObservableObject
     }
 
     /// <summary>Re-renders the flyout from the cached snapshot when display settings change (no refetch).</summary>
-    public void ApplyDisplaySettings() =>
-        Application.Current?.Dispatcher.Invoke(Rebuild);
+    public void ApplyDisplaySettings() => QueueRebuild();
 
-    private void OnStateChanged(object? sender, EventArgs e) =>
-        Application.Current?.Dispatcher.Invoke(Rebuild);
+    /// <summary>
+    /// Raised on whichever thread published the snapshot — usually the poller's. Posting rather
+    /// than blocking keeps the poller from waiting on a UI round-trip, and the flag folds a burst
+    /// of changes into one render.
+    /// </summary>
+    private void OnStateChanged(object? sender, EventArgs e) => QueueRebuild();
+
+    private void QueueRebuild()
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || Interlocked.Exchange(ref _rebuildQueued, 1) == 1)
+        {
+            return;
+        }
+
+        _ = dispatcher.InvokeAsync(() =>
+        {
+            Volatile.Write(ref _rebuildQueued, 0);
+            Rebuild(force: false);
+        });
+    }
 
     private InboxGrouping? _lastGrouping;
 
@@ -332,18 +360,10 @@ public sealed partial class InboxViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Re-renders from the cached snapshot. This parameterless overload exists so the method
-    /// group can be passed straight to <see cref="System.Windows.Threading.Dispatcher.Invoke(Action)"/>:
-    /// with only the optional-parameter form, the method group's natural type is
-    /// <c>Action&lt;bool&gt;</c>, which silently binds to the <c>Invoke(Delegate, params object[])</c>
-    /// overload and throws TargetParameterCountException at runtime.
-    /// </summary>
-    private void Rebuild() => Rebuild(force: false);
-
+    /// <summary>Re-renders from the cached snapshot. Must run on the UI thread.</summary>
     /// <param name="force">
-    /// Re-render the status line even when no item moved — needed when only
-    /// <see cref="_degradedNotice"/> changed.
+    /// Re-render every row even when no item moved, so time-dependent text (relative times,
+    /// recency buckets) is current.
     /// </param>
     private void Rebuild(bool force)
     {
@@ -405,8 +425,10 @@ public sealed partial class InboxViewModel : ObservableObject
             OnPropertyChanged(nameof(Grouping));
             ReloadCollapsedGroups(settings, grouping);
         }
-        else if (changed || force)
+        else if (force)
         {
+            // Not needed for ordinary changes: the view places added and replaced rows into
+            // their sorted group itself.
             ItemsView.Refresh();
         }
 
@@ -416,6 +438,12 @@ public sealed partial class InboxViewModel : ObservableObject
             return;
         }
 
+        UpdateStatus();
+    }
+
+    /// <summary>Recomputes the header's status line and the item-derived flags.</summary>
+    private void UpdateStatus()
+    {
         var unread = Items.Count(i => i.IsUnread);
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(HasUnread));
@@ -431,35 +459,44 @@ public sealed partial class InboxViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Reconciles <see cref="Items"/> to <paramref name="target"/> in place (replace/append/trim)
-    /// rather than Clear()+rebuild, so a poll that changes nothing produces no collection events.
+    /// Reconciles <see cref="Items"/> to <paramref name="target"/> by item key: rows that left are
+    /// removed, rows whose item changed are replaced in place, new rows are appended. Position in
+    /// <see cref="Items"/> is irrelevant — <see cref="ItemsView"/> sorts — so one new item costs
+    /// one Add, not a Replace for every row it would otherwise have shifted.
     /// Returns whether the collection was modified.
     /// </summary>
     private bool SyncItems(IReadOnlyList<InboxItemViewModel> target)
     {
         var changed = false;
-
-        for (var i = 0; i < target.Count; i++)
+        var pending = new Dictionary<(ProviderKind, string, string), InboxItemViewModel>(target.Count);
+        foreach (var vm in target)
         {
-            if (i < Items.Count)
+            pending[vm.Item.Key] = vm;
+        }
+
+        for (var i = Items.Count - 1; i >= 0; i--)
+        {
+            var current = Items[i];
+            if (!pending.Remove(current.Item.Key, out var replacement))
             {
-                if (!ReferenceEquals(Items[i], target[i]))
-                {
-                    Items[i] = target[i];
-                    changed = true;
-                }
+                Items.RemoveAt(i);
+                changed = true;
             }
-            else
+            else if (!ReferenceEquals(current, replacement))
             {
-                Items.Add(target[i]);
+                Items[i] = replacement;
                 changed = true;
             }
         }
 
-        while (Items.Count > target.Count)
+        // What's left is new; add in snapshot order.
+        foreach (var vm in target)
         {
-            Items.RemoveAt(Items.Count - 1);
-            changed = true;
+            if (pending.Remove(vm.Item.Key))
+            {
+                Items.Add(vm);
+                changed = true;
+            }
         }
 
         return changed;

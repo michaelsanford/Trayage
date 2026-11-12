@@ -35,7 +35,7 @@ public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<W
 
         if (style == NotificationStyle.AudioOnly)
         {
-            NotificationSoundPlayer.Play(sound, volume, logger);
+            NotificationSoundPlayer.PlayForNotification(sound, volume, logger);
             return;
         }
 
@@ -44,7 +44,7 @@ public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<W
             logger.LogDebug("App notifications aren't supported on this system; skipping toast.");
             if (style == NotificationStyle.Both)
             {
-                NotificationSoundPlayer.Play(sound, volume, logger);
+                NotificationSoundPlayer.PlayForNotification(sound, volume, logger);
             }
             return;
         }
@@ -65,7 +65,7 @@ public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<W
             else if (style == NotificationStyle.Both)
             {
                 builder.MuteAudio();
-                NotificationSoundPlayer.Play(sound, volume, logger);
+                NotificationSoundPlayer.PlayForNotification(sound, volume, logger);
             }
 
             var notification = builder.BuildNotification();
@@ -77,7 +77,7 @@ public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<W
             logger.LogWarning(ex, "Failed to show an app notification.");
             if (style == NotificationStyle.Both)
             {
-                NotificationSoundPlayer.Play(sound, volume, logger);
+                NotificationSoundPlayer.PlayForNotification(sound, volume, logger);
             }
         }
     }
@@ -94,7 +94,7 @@ public sealed class WindowsToastNotifier(ISettingsStore settingsStore, ILogger<W
         // and silently dropping a "sync failed" alert is the failure mode this exists to prevent.
         if (style != NotificationStyle.ToastOnly)
         {
-            NotificationSoundPlayer.Play(sound, volume, logger);
+            NotificationSoundPlayer.PlayForNotification(sound, volume, logger);
         }
 
         if (!IsAvailable)
