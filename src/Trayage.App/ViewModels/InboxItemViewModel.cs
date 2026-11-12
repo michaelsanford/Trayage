@@ -6,10 +6,13 @@ using Wpf.Ui.Controls;
 namespace Trayage.App.ViewModels;
 
 /// <summary>Read-only presentation wrapper around an <see cref="InboxItem"/> for the flyout list.</summary>
+/// <remarks>
+/// The item and grouping never change after construction, so everything derived from them is
+/// computed once here. Several of these are sort and group keys the collection view reads by
+/// reflection on every comparison. Only time-dependent text is computed on read.
+/// </remarks>
 public sealed class InboxItemViewModel
 {
-    private readonly InboxGrouping _grouping;
-
     /// <param name="item">The inbox item.</param>
     /// <param name="grouping">
     /// How the list is grouped, which decides how much of the repository name the subtitle
@@ -27,8 +30,13 @@ public sealed class InboxItemViewModel
         string? accountLabel = null)
     {
         Item = item;
-        _grouping = grouping;
         AccountLabel = accountLabel;
+
+        var (owner, name) = RepositoryReference.Split(item.RepositoryFullName);
+        RepositoryOwner = owner;
+        RepositoryShortName = name;
+        KindLabel = LabelFor(item.Kind);
+        Subtitle = BuildSubtitle(grouping);
     }
 
     /// <summary>The account this item came from, or null when naming it wouldn't disambiguate.</summary>
@@ -43,18 +51,16 @@ public sealed class InboxItemViewModel
     public string RepositoryFullName => Item.RepositoryFullName;
 
     /// <summary>The owner/organisation half of <see cref="RepositoryFullName"/>; the owner-grouping key.</summary>
-    public string RepositoryOwner => RepositoryReference.Split(Item.RepositoryFullName).Owner;
+    public string RepositoryOwner { get; }
 
     /// <summary>The repository half of <see cref="RepositoryFullName"/>, without its owner.</summary>
-    public string RepositoryShortName => RepositoryReference.Split(Item.RepositoryFullName).Name;
+    public string RepositoryShortName { get; }
 
     public string WebUrl => Item.WebUrl;
 
     public bool IsUnread => Item.IsUnread;
 
     public DateTimeOffset UpdatedAt => Item.UpdatedAt;
-
-
 
     /// <summary>
     /// Coarse recency bucket used to group the flat (non-repo) list. Returned in newest-first
@@ -77,7 +83,9 @@ public sealed class InboxItemViewModel
         }
     }
 
-    public string KindLabel => Item.Kind switch
+    public string KindLabel { get; }
+
+    private static string LabelFor(InboxItemKind kind) => kind switch
     {
         InboxItemKind.ReviewRequest => "Review requested",
         InboxItemKind.Mention => "Mention",
@@ -85,7 +93,7 @@ public sealed class InboxItemViewModel
         InboxItemKind.CiStatus => "CI status",
         InboxItemKind.RepoActivity => "Activity",
         InboxItemKind.Participating => "Participating",
-        _ => Item.Kind.ToString(),
+        _ => kind.ToString(),
     };
 
     /// <summary>Per-kind glyph shown in the row badge.</summary>
@@ -106,33 +114,32 @@ public sealed class InboxItemViewModel
     /// The row's second line: what the item is, not when it moved. <see cref="RelativeTime"/>
     /// is rendered separately, right-aligned on the title line, so it stays out of here.
     /// </summary>
-    public string Subtitle
+    public string Subtitle { get; }
+
+    private string BuildSubtitle(InboxGrouping grouping)
     {
-        get
+        var parts = new List<string>(3);
+
+        // Say as much of the repository as the group header leaves unsaid.
+        var repo = grouping switch
         {
-            var parts = new List<string>(3);
+            InboxGrouping.Repository => null,
+            InboxGrouping.Owner => RepositoryShortName,
+            _ => RepositoryFullName,
+        };
 
-            // Say as much of the repository as the group header leaves unsaid.
-            var repo = _grouping switch
-            {
-                InboxGrouping.Repository => null,
-                InboxGrouping.Owner => RepositoryShortName,
-                _ => RepositoryFullName,
-            };
-
-            if (repo is { Length: > 0 })
-            {
-                parts.Add(repo);
-            }
-
-            parts.Add(KindLabel);
-            if (AccountLabel is { Length: > 0 } account)
-            {
-                parts.Add(account);
-            }
-
-            return string.Join(" · ", parts);
+        if (repo is { Length: > 0 })
+        {
+            parts.Add(repo);
         }
+
+        parts.Add(KindLabel);
+        if (AccountLabel is { Length: > 0 } account)
+        {
+            parts.Add(account);
+        }
+
+        return string.Join(" · ", parts);
     }
 
     private static string FormatRelative(DateTimeOffset when)

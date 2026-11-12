@@ -41,7 +41,11 @@ public sealed class NotificationSettings
     public bool CiStatus { get; set; }
     public bool WatchedRepoActivity { get; set; } = true;
     public NotificationStyle Style { get; set; } = NotificationStyle.Both;
-    public string Sound { get; set; } = "System Asterisk";
+    /// <summary>
+    /// A bundled WAV name (e.g. "Glass") or a Windows system-sound alias. Unknown values play
+    /// the SystemAsterisk fallback, which is also the default.
+    /// </summary>
+    public string Sound { get; set; } = "SystemAsterisk";
     public int Volume { get; set; } = 50;
 
     /// <summary>Activity on issues/PRs you authored or are participating in.</summary>

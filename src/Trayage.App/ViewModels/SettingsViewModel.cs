@@ -25,8 +25,6 @@ public sealed record NotificationStyleOption(string Label, NotificationStyle Sty
 /// <summary>A selectable inbox layout: a display label and the grouping it applies.</summary>
 public sealed record InboxGroupingOption(string Label, InboxGrouping Grouping);
 
-public sealed record NotificationSoundOption(string Label, string Value);
-
 /// <summary>An entry in the "Add account" menu: which provider a new account would connect to.</summary>
 public sealed record AddAccountOption(string Label, ProviderKind Provider);
 // ReSharper restore NotAccessedPositionalProperty.Global
@@ -58,7 +56,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _notifyWatchedRepoActivity;
     [ObservableProperty] private bool _notifyParticipating;
     [ObservableProperty] private NotificationStyle _selectedNotificationStyle;
-    [ObservableProperty] private string _selectedNotificationSound = "System Asterisk";
+    [ObservableProperty] private string _selectedNotificationSound = NotificationSoundCatalog.FallbackSound;
     [ObservableProperty] private int _notificationVolume = 50;
 
     [ObservableProperty] private int _pollIntervalSeconds;
@@ -86,9 +84,6 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     /// <summary>Raised when an inbox display option (grouping / show-read) changes.</summary>
     public event Action? InboxDisplayChanged;
-
-    /// <summary>Raised when accounts are added, removed, renamed, or paused.</summary>
-    public event Action? AccountsChanged;
 
     /// <summary>The connected accounts, in the order they were added.</summary>
     public ObservableCollection<ProviderAccountViewModel> Accounts { get; } = new();
@@ -156,7 +151,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         var viewModel = NewAccountViewModel(provider, account);
         Accounts.Add(viewModel);
         OnPropertyChanged(nameof(HasNoAccounts));
-        AccountsChanged?.Invoke();
 
         await viewModel.ConnectCommand.ExecuteAsync(null);
 
@@ -184,7 +178,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         _registry.Remove(account.AccountId);
         Accounts.Remove(account);
         OnPropertyChanged(nameof(HasNoAccounts));
-        AccountsChanged?.Invoke();
         _ = _inboxService.RefreshAsync(CancellationToken.None);
     }
 
@@ -214,12 +207,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(HasNoAccounts));
     }
 
-    private ProviderAccountViewModel NewAccountViewModel(IInboxProvider provider, ProviderAccount account)
-    {
-        var viewModel = new ProviderAccountViewModel(provider, account, _settings, _inboxService);
-        viewModel.Changed += () => AccountsChanged?.Invoke();
-        return viewModel;
-    }
+    private ProviderAccountViewModel NewAccountViewModel(IInboxProvider provider, ProviderAccount account) =>
+        new(provider, account, _settings, _inboxService);
 
     public IReadOnlyList<AppTheme> Themes { get; } = new[] { AppTheme.System, AppTheme.Light, AppTheme.Dark };
 
@@ -246,57 +235,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         new NotificationStyleOption("Sound only", NotificationStyle.AudioOnly)
     };
 
-    private IReadOnlyList<NotificationSoundOption>? _notificationSounds;
-    public IReadOnlyList<NotificationSoundOption> NotificationSounds => _notificationSounds ??= LoadAvailableSounds();
+    public IReadOnlyList<NotificationSoundOption> NotificationSounds => NotificationSoundCatalog.Options;
 
     public bool SoundSelectionEnabled => SelectedNotificationStyle != NotificationStyle.ToastOnly;
-
-    private static IReadOnlyList<NotificationSoundOption> LoadAvailableSounds()
-    {
-        var list = new List<NotificationSoundOption>();
-        try
-        {
-            var dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Notifications");
-            if (Directory.Exists(dir))
-            {
-                var files = Directory.GetFiles(dir, "*.wav");
-                var customOptions = files
-                    .Select(Path.GetFileNameWithoutExtension)
-                    .OfType<string>()
-                    .Select(name => new NotificationSoundOption(SplitCamelCase(name), name))
-                    .ToList();
-
-                string GetSortKey(string label)
-                {
-                    if (label == "Third High") return "Third 1";
-                    if (label == "Third Mid") return "Third 2";
-                    if (label == "Third Low") return "Third 3";
-                    return label;
-                }
-
-                customOptions = customOptions.OrderBy(o => GetSortKey(o.Label), StringComparer.OrdinalIgnoreCase).ToList();
-                list.AddRange(customOptions);
-            }
-        }
-        catch
-        {
-            // Ignore directory search errors
-        }
-
-        // Add system sound options at the end
-        list.Add(new NotificationSoundOption("System Notification", "SystemNotification"));
-        list.Add(new NotificationSoundOption("System Mail Beep", "MailBeep"));
-        list.Add(new NotificationSoundOption("System Asterisk", "SystemAsterisk"));
-        list.Add(new NotificationSoundOption("System Default Beep", "SystemDefault"));
-
-        return list;
-    }
-
-    private static string SplitCamelCase(string input)
-    {
-        if (string.IsNullOrEmpty(input)) return string.Empty;
-        return System.Text.RegularExpressions.Regex.Replace(input, "([A-Z])", " $1").Trim();
-    }
 
     private void PreviewSound(string soundName, int? volume = null)
     {
@@ -429,12 +370,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         SelectedNotificationStyle = s.Notifications.Style;
 
-        var loadedSound = s.Notifications.Sound;
-        if (NotificationSounds.All(o => o.Value != loadedSound))
-        {
-            loadedSound = NotificationSounds.Any(o => o.Value == "Glass") ? "Glass" : (NotificationSounds.Count > 0 ? NotificationSounds[0].Value : "SystemNotification");
-        }
-        SelectedNotificationSound = loadedSound;
+        // An unknown stored value plays the fallback sound, so show the fallback too — rather than
+        // pre-selecting some other sound the user doesn't actually hear.
+        SelectedNotificationSound = NotificationSoundCatalog.Normalize(s.Notifications.Sound);
         NotificationVolume = s.Notifications.Volume;
 
         // Snap a previously-saved cadence that's no longer offered to the nearest option,

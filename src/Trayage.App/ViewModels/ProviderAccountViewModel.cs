@@ -66,7 +66,13 @@ public sealed partial class ProviderAccountViewModel : ObservableObject
     // API; the manual "Refresh" button always reloads.
     private bool _reposAutoLoaded;
 
-    private readonly bool _loading;
+    /// <summary>
+    /// How long to wait after the last watch toggle or pause/resume before
+    /// refreshing the inbox, so checking ten repositories costs one refresh, not ten.
+    /// </summary>
+    private static readonly TimeSpan RefreshDebounce = TimeSpan.FromMilliseconds(750);
+
+    private CancellationTokenSource? _pendingRefresh;
 
     public ProviderAccountViewModel(
         IInboxProvider provider,
@@ -81,12 +87,12 @@ public sealed partial class ProviderAccountViewModel : ObservableObject
         AccountId = account.Id;
         Provider = account.Provider;
 
-        _loading = true;
+        // Backing fields, not properties: the generated change handlers (which persist and
+        // refresh) must not run while the card is being populated from the saved row.
         _nickname = account.Nickname ?? string.Empty;
         _isEnabled = account.Enabled;
         _connected = provider.IsConnected;
         _accountLogin = provider.AccountLogin ?? account.AccountLogin;
-        _loading = false;
 
         foreach (var repo in account.WatchedRepositories)
         {
@@ -134,9 +140,6 @@ public sealed partial class ProviderAccountViewModel : ObservableObject
     [ObservableProperty] private string _newWatchedRepo = string.Empty;
     [ObservableProperty] private string _watchedRepoError = string.Empty;
 
-    /// <summary>Raised when this account changes in a way the inbox or tray should see.</summary>
-    public event Action? Changed;
-
     /// <summary>The label shown on the card and beside inbox items from this account.</summary>
     public string DisplayLabel => Nickname is { Length: > 0 } n
         ? n
@@ -182,23 +185,12 @@ public sealed partial class ProviderAccountViewModel : ObservableObject
 
     partial void OnNicknameChanged(string value)
     {
-        if (_loading)
-        {
-            return;
-        }
-
         Mutate(a => a.Nickname = string.IsNullOrWhiteSpace(value) ? null : value.Trim());
         NotifyLabels();
-        Changed?.Invoke();
     }
 
     partial void OnIsEnabledChanged(bool value)
     {
-        if (_loading)
-        {
-            return;
-        }
-
         Mutate(a => a.Enabled = value);
         OnPropertyChanged(nameof(StatusLabel));
         Refresh();
@@ -547,9 +539,26 @@ public sealed partial class ProviderAccountViewModel : ObservableObject
         _settings.Save(current);
     }
 
+    /// <summary>Refreshes the inbox once changes to this account settle (see <see cref="RefreshDebounce"/>).</summary>
     private void Refresh()
     {
-        Changed?.Invoke();
-        _ = _inboxService.RefreshAsync(CancellationToken.None);
+        _pendingRefresh?.Cancel();
+        _pendingRefresh?.Dispose();
+        _pendingRefresh = new CancellationTokenSource();
+        _ = RefreshWhenSettledAsync(_pendingRefresh.Token);
+    }
+
+    private async Task RefreshWhenSettledAsync(CancellationToken superseded)
+    {
+        try
+        {
+            await Task.Delay(RefreshDebounce, superseded).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // A later change restarted the wait.
+        }
+
+        await _inboxService.RefreshAsync(CancellationToken.None).ConfigureAwait(false);
     }
 }
