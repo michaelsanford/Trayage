@@ -53,7 +53,8 @@ internal static class ServiceRegistration
         builder.Services.AddSingleton<ProviderRegistry>();
 
         // UI / shell (Phase 1, 4 & 6)
-        builder.Services.AddSingleton<TrayIconService>();
+        // TrayIconService is deliberately not registered: App creates it before the host exists
+        // so the icon appears immediately, and nothing else depends on it.
         builder.Services.AddSingleton<InboxViewModel>();
         builder.Services.AddSingleton<InboxFlyout>();
         builder.Services.AddSingleton<SettingsViewModel>();

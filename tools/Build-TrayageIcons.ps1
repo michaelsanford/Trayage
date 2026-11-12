@@ -12,6 +12,7 @@
       blue, no accent       connected, all caught up             — plain blue bars
       grey                  nothing connected / configured       — grey bars
       red                   configured but unreachable / error   — red bars
+      faded blue            starting up / first sync in progress — translucent blue bars
 
     This script is the SINGLE SOURCE OF TRUTH for that glyph: the geometry lives here once
     and every output is rendered from it with GDI+ (System.Drawing), so there is no
@@ -23,6 +24,7 @@
       src/Trayage.App/Assets/trayage-unread.ico         State: blue bars + amber top (unread waiting)
       src/Trayage.App/Assets/trayage-disconnected.ico   State: grey bars (nothing connected)
       src/Trayage.App/Assets/trayage-error.ico          State: red bars (configured but unreachable)
+      src/Trayage.App/Assets/trayage-starting.ico       State: faded blue bars (starting / first sync)
       assets/oauth/trayage-oauth-{512,256,128}.png      Full-colour tile for the OAuth app logo
 
     State icons are transparent (no tile); the app/exe and OAuth tiles sit on the graphite
@@ -55,6 +57,7 @@ $Color = @{
     Grey        = [System.Drawing.ColorTranslator]::FromHtml('#9aa3b5')  # disconnected
     GreySoft    = [System.Drawing.ColorTranslator]::FromHtml('#cfd6e4')  # disconnected accent
     BlueHi      = [System.Drawing.ColorTranslator]::FromHtml('#5b97f7')  # bars (lit)
+    BlueFaded   = [System.Drawing.Color]::FromArgb(150, 0x5b, 0x97, 0xf7) # bars (starting): BlueHi at ~60% alpha
 }
 
 # ---------------------------------------------------------------------------
@@ -218,6 +221,8 @@ $Variants = @{
     Disconnected = @{ Tile = $false; Bar = $Color.Grey;   Accent = $Color.GreySoft;    AccentTop = $false }
     # Configured but unreachable / error — red bars.
     Error        = @{ Tile = $false; Bar = $Color.Signal; Accent = $Color.SignalSoft;  AccentTop = $false }
+    # Starting up / waiting for the first sync — translucent blue bars, "not ready yet".
+    Starting     = @{ Tile = $false; Bar = $Color.BlueFaded; Accent = $Color.BlueFaded; AccentTop = $false }
 }
 
 # ---------------------------------------------------------------------------
@@ -241,6 +246,7 @@ Build-Ico -Sizes $stateSizes -Path (Join-Path $appAssets 'trayage-caughtup.ico')
 Build-Ico -Sizes $stateSizes -Path (Join-Path $appAssets 'trayage-unread.ico')       -Variant $Variants.Unread
 Build-Ico -Sizes $stateSizes -Path (Join-Path $appAssets 'trayage-disconnected.ico') -Variant $Variants.Disconnected
 Build-Ico -Sizes $stateSizes -Path (Join-Path $appAssets 'trayage-error.ico')        -Variant $Variants.Error
+Build-Ico -Sizes $stateSizes -Path (Join-Path $appAssets 'trayage-starting.ico')     -Variant $Variants.Starting
 
 # OAuth app tiles — large full-colour badges (e.g. GitHub OAuth App logo upload).
 foreach ($s in 512, 256, 128) {
@@ -253,7 +259,7 @@ foreach ($s in 512, 256, 128) {
 if ($Preview) {
     $previewDir = Join-Path $PSScriptRoot 'preview'
     New-Item -ItemType Directory -Force -Path $previewDir | Out-Null
-    $order = 'App', 'CaughtUp', 'Unread', 'Disconnected', 'Error'
+    $order = 'App', 'CaughtUp', 'Unread', 'Disconnected', 'Error', 'Starting'
     $cell = 128; $pad = 16; $smalls = @(16, 20, 24, 32)
     $cols = $order.Count
     $smallStripH = ($smalls | Measure-Object -Maximum).Maximum + 14

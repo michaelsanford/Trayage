@@ -37,6 +37,9 @@ public partial class App
     private Window? _trayHost;
     private bool _notificationsRegistered;
 
+    // Set by the first InboxState.Changed (raised on the poller's thread).
+    private volatile bool _firstSnapshotReceived;
+
     // Available from the moment the host is built. Defaults to a no-op so the session-end
     // path can log unconditionally even if Windows ends the session mid-startup.
     private ILogger _logger = NullLogger.Instance;
@@ -46,6 +49,7 @@ public partial class App
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        var onStartupMs = MillisecondsSinceProcessStart();
         base.OnStartup(e);
 
         RegisterGlobalExceptionHandlers();
@@ -68,6 +72,57 @@ public partial class App
             return;
         }
 
+        // Tray-only: never quit just because no window is open.
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+        // Show the tray icon before anything else, so a launch (especially a cold one at login)
+        // gives immediate feedback. Only what the icon itself needs happens first: the saved
+        // theme (one small JSON read, so the menu is styled correctly) and the hidden host
+        // window. Everything else waits until the shell has painted the icon.
+        var earlySettings = new JsonSettingsStore(NullLogger<JsonSettingsStore>.Instance).Load();
+        Services.ThemeApplier.Apply(earlySettings.Theme);
+
+        // WPF-UI's tray icon needs a window handle to hook onto. As a tray-only app we
+        // have no real window, so create a hidden, off-screen host window to anchor it.
+        _trayHost = CreateTrayHostWindow();
+        MainWindow = _trayHost;
+
+        // Starts in the faded "starting" state with only Quit enabled, so even a slow or
+        // failed startup can be exited from the tray.
+        _tray = new TrayIconService();
+        _tray.QuitRequested += Quit;
+        _tray.SetParentWindow(_trayHost);
+        var registered = _tray.Register();
+        var trayShownMs = MillisecondsSinceProcessStart();
+
+        // Let the shell paint the icon before the heavier startup work below.
+        await Dispatcher.Yield(DispatcherPriority.Background);
+
+        try
+        {
+            await StartHostAsync(earlySettings.VerboseLogging);
+            _logger.LogInformation(
+                "Tray icon registered: {Registered} ({Elapsed} ms after process start; OnStartup began at {OnStartup} ms).",
+                registered, trayShownMs, onStartupMs);
+        }
+        catch (Exception ex)
+        {
+            // Without this, the dispatcher's unhandled-exception handler would swallow the
+            // failure and leave a process that holds the single-instance mutex but does nothing.
+            CrashLog.Write("Startup", ex);
+            _tray.SetStatus(TrayStatus.Failed);
+            MessageBox.Show(
+                $"Trayage couldn't start: {ex.Message}\n\nDetails were written to {TrayagePaths.LogDirectory}.",
+                "Trayage", MessageBoxButton.OK, MessageBoxImage.Error);
+            Quit();
+        }
+    }
+
+    /// <summary>
+    /// Everything that needs the generic host, run after the tray icon is already visible.
+    /// </summary>
+    private async Task StartHostAsync(bool verbose)
+    {
         // Open the page behind a toast when the user clicks it. The handler must be registered
         // before Register() so a click arrives in-process instead of launching a new instance.
         // Guarded by IsSupported(): app notifications need the Windows App SDK Singleton package,
@@ -85,9 +140,48 @@ public partial class App
             }
         }
 
-        // Tray-only: never quit just because no window is open.
-        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        // Building the host, migrating settings and restoring every account's session is file
+        // I/O and DPAPI work that touches nothing in WPF (DI builds the UI singletons lazily, on
+        // first resolve), so it runs off the UI thread to keep the tray menu responsive.
+        var host = await Task.Run(() => BuildHost(verbose));
+        if (IsShuttingDown)
+        {
+            // Quit was chosen from the tray while the host was being built.
+            host.Dispose();
+            return;
+        }
 
+        _host = host;
+        _logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Trayage.App");
+
+        WireTray(_tray!);
+
+        // Reflect connection + unread state on the tray icon as the inbox changes. Subscribed
+        // before the host starts so the first poll's snapshot can't be missed. Connect and
+        // disconnect both trigger a refresh, so this also catches sign-in/out.
+        host.Services.GetRequiredService<InboxState>().Changed += OnInboxStateChanged;
+        host.Services.GetRequiredService<ProviderRegistry>().Changed += OnProviderRegistryChanged;
+        _tray!.SetReady(true);
+        RefreshTrayStatus();
+
+        // The hosted InboxPollingService performs the first (and recurring) refreshes.
+        await host.StartAsync();
+        _logger.LogInformation("Host started ({Elapsed} ms after process start).", MillisecondsSinceProcessStart());
+
+        // On the very first launch, pop the inbox flyout so it's obvious Trayage started
+        // and where the Settings button is. Shown only once.
+        var settingsStore = host.Services.GetRequiredService<ISettingsStore>();
+        var settings = settingsStore.Load();
+        if (!settings.FirstRunCompleted)
+        {
+            Flyout.ShowNearTray();
+            settings.FirstRunCompleted = true;
+            settingsStore.Save(settings);
+        }
+    }
+
+    private static IHost BuildHost(bool verbose)
+    {
         // Anchor configuration to the executable's directory (not the launch CWD) so the
         // shipped appsettings.json is always found. appsettings.local.json — gitignored —
         // layers developer credentials on top for local runs.
@@ -97,65 +191,31 @@ public partial class App
         });
         builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false);
 
-        // Verbosity comes from saved settings (read directly, before DI exists). Verbose mode
-        // captures Debug-level detail for bug reports; logs never contain tokens or logins.
-        var verbose = new JsonSettingsStore(NullLogger<JsonSettingsStore>.Instance).Load().VerboseLogging;
+        // Verbose mode captures Debug-level detail for bug reports; logs never contain tokens or logins.
         var logLevel = verbose ? LogLevel.Debug : LogLevel.Information;
-
         builder.Logging.ClearProviders();
         builder.Logging.SetMinimumLevel(logLevel);
         builder.Logging.AddProvider(new FileLoggerProvider(Path.Combine(TrayagePaths.LogDirectory, "trayage.log"), logLevel));
         builder.ConfigureTrayageServices();
-        _host = builder.Build();
+        var host = builder.Build();
 
         // Upgrade a pre-accounts settings.json (and re-key its tokens) *before* anything reads
         // accounts — the hosted poller resolves providers as soon as the host starts.
-        var migrationLogger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Trayage.Migration");
+        var migrationLogger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Trayage.Migration");
         SettingsMigration.Run(
-            _host.Services.GetRequiredService<ISettingsStore>(),
-            _host.Services.GetRequiredService<ISecretStore>(),
+            host.Services.GetRequiredService<ISettingsStore>(),
+            host.Services.GetRequiredService<ISecretStore>(),
             migrationLogger);
 
         // Build one provider instance per configured account.
-        _host.Services.GetRequiredService<ProviderRegistry>().Initialize();
+        host.Services.GetRequiredService<ProviderRegistry>().Initialize();
+        return host;
+    }
 
-        await _host.StartAsync();
-
-        var settingsStore = _host.Services.GetRequiredService<ISettingsStore>();
-        var settings = settingsStore.Load();
-
-        // Apply the saved theme before any window is shown.
-        Services.ThemeApplier.Apply(settings.Theme);
-
-        // WPF-UI's tray icon needs a window handle to hook onto. As a tray-only app we
-        // have no real window, so create a hidden, off-screen host window to anchor it.
-        _trayHost = CreateTrayHostWindow();
-        MainWindow = _trayHost;
-
-        _logger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Trayage.App");
-
-        _tray = _host.Services.GetRequiredService<TrayIconService>();
-        WireTray(_tray);
-        _tray.SetParentWindow(_trayHost);
-        var registered = _tray.Register();
-        _logger.LogInformation("Tray icon registered: {Registered}", registered);
-
-        // Reflect connection + unread state on the tray icon as the inbox changes.
-        // Connect/disconnect both trigger a refresh, so this also catches sign-in/out.
-        // The hosted InboxPollingService performs the first (and recurring) refreshes.
-        var inboxState = _host.Services.GetRequiredService<InboxState>();
-        inboxState.Changed += (_, _) => RefreshTrayStatus();
-        _host.Services.GetRequiredService<ProviderRegistry>().Changed += OnProviderRegistryChanged;
-        RefreshTrayStatus();
-
-        // On the very first launch, pop the inbox flyout so it's obvious Trayage started
-        // and where the Settings button is. Shown only once.
-        if (!settings.FirstRunCompleted)
-        {
-            Flyout.ShowNearTray();
-            settings.FirstRunCompleted = true;
-            settingsStore.Save(settings);
-        }
+    private static long MillisecondsSinceProcessStart()
+    {
+        using var process = System.Diagnostics.Process.GetCurrentProcess();
+        return (long)(DateTime.Now - process.StartTime).TotalMilliseconds;
     }
 
     /// <summary>
@@ -229,7 +289,6 @@ public partial class App
 
     private void WireTray(TrayIconService tray)
     {
-        tray.QuitRequested += Quit;
         tray.LeftClicked += ToggleInboxFlyout;
         tray.OpenInboxRequested += ShowInboxFlyout;
         tray.RefreshRequested += RefreshInbox;
@@ -314,6 +373,21 @@ public partial class App
 
     private void ShowInboxFlyout() => Flyout.ShowNearTray();
 
+    /// <summary>
+    /// Every published snapshot re-renders the tray. The first one also ends the faded
+    /// "syncing" state shown since launch.
+    /// </summary>
+    private void OnInboxStateChanged(object? sender, EventArgs e)
+    {
+        if (!_firstSnapshotReceived)
+        {
+            _firstSnapshotReceived = true;
+            _logger.LogInformation("First inbox snapshot ({Elapsed} ms after process start).", MillisecondsSinceProcessStart());
+        }
+
+        RefreshTrayStatus();
+    }
+
     /// <summary>Re-renders the tray when accounts are added or removed.</summary>
     private void OnProviderRegistryChanged(object? sender, EventArgs e) => RefreshTrayStatus();
 
@@ -350,7 +424,13 @@ public partial class App
         // shows a "?". A live session resolves to the unread/caught-up tray.
         TrayStatus status;
         var connectionError = false;
-        if (liveConnected)
+        if (configured && !_firstSnapshotReceived)
+        {
+            // Accounts exist but the first poll hasn't finished: keep the faded icon rather
+            // than flashing "connection problem" while sessions are still being restored.
+            status = TrayStatus.Syncing;
+        }
+        else if (liveConnected)
         {
             status = inboxState.HasUnread ? TrayStatus.Unread : TrayStatus.CaughtUp;
         }

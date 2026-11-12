@@ -12,6 +12,8 @@
     <Resource Include="Assets\trayage-caughtup.ico" />
     <Resource Include="Assets\trayage-unread.ico" />
     <Resource Include="Assets\trayage-error.ico" />
+    <!-- Faded bars shown from launch until the first poll completes. -->
+    <Resource Include="Assets\trayage-starting.ico" />
   </ItemGroup>
 
   <ItemGroup>
@@ -64,6 +66,10 @@
     <AssemblyName>Trayage</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\trayage.ico</ApplicationIcon>
+
+    <!-- Precompile to native code on RID publishes so a cold start (e.g. at login) spends
+         far less time in the JIT. Ignored by plain RID-less builds. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
 
 </Project>
