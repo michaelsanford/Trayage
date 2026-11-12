@@ -8,8 +8,9 @@ using Trayage.Core.Providers;
 
 namespace Trayage.Core.Tests;
 
-public sealed class InboxPollingServiceTests
+public sealed class InboxPollingServiceTests : IDisposable
 {
+    private readonly TempDirectory _temp = new();
     private readonly IToastNotifier _notifier = Substitute.For<IToastNotifier>();
     private readonly ISettingsStore _settings = Substitute.For<ISettingsStore>();
 
@@ -40,7 +41,7 @@ public sealed class InboxPollingServiceTests
     {
         var registry = TestProviders.Registry(_settings, providers);
         var inboxService = new InboxService(
-            registry, new InboxAggregator(), new InboxState(), TestProviders.ReadState(), _settings,
+            registry, new InboxAggregator(), new InboxState(), TestProviders.ReadState(_temp), _settings,
             NullLogger<InboxService>.Instance);
 
         return new InboxPollingService(
@@ -250,4 +251,6 @@ public sealed class InboxPollingServiceTests
 
         Assert.Equal(TimeSpan.FromSeconds(600), service.NextInterval());
     }
+
+    public void Dispose() => _temp.Dispose();
 }

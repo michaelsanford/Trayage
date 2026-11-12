@@ -7,16 +7,22 @@ using Trayage.Core.Providers;
 
 namespace Trayage.Core.Tests;
 
-public sealed class InboxServiceTests
+public sealed class InboxServiceTests : IDisposable
 {
+    private readonly TempDirectory _temp = new();
     private readonly ISettingsStore _settings = Substitute.For<ISettingsStore>();
     private readonly InboxState _state = new();
     private readonly TrayageSettings _stored = new();
 
-    public InboxServiceTests() =>
+    public InboxServiceTests()
+    {
         _settings.Load().Returns(_stored);
+        _readState = TestProviders.ReadState(_temp);
+    }
 
-    private readonly IReadStateStore _readState = TestProviders.ReadState();
+    public void Dispose() => _temp.Dispose();
+
+    private readonly IReadStateStore _readState;
 
     private InboxService NewService(params IInboxProvider[] providers) =>
         new(TestProviders.Registry(_settings, providers), new InboxAggregator(), _state, _readState,
