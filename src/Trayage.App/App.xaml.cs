@@ -10,11 +10,7 @@ using Trayage.App.Logging;
 using Trayage.App.Notifications;
 using Trayage.App.Tray;
 using Trayage.App.ViewModels;
-using Trayage.App.Views;
 using Trayage.Core.Configuration;
-using Trayage.Core.Inbox;
-using Trayage.Core.Models;
-using Trayage.Core.Notifications;
 using Trayage.Core.Providers;
 using Trayage.Core.Security;
 using Microsoft.Windows.AppLifecycle;
@@ -37,9 +33,6 @@ public partial class App
     private Window? _trayHost;
     private bool _notificationsRegistered;
 
-    // Set by the first InboxState.Changed (raised on the poller's thread).
-    private volatile bool _firstSnapshotReceived;
-
     // Available from the moment the host is built. Defaults to a no-op so the session-end
     // path can log unconditionally even if Windows ends the session mid-startup.
     private ILogger _logger = NullLogger.Instance;
@@ -49,7 +42,7 @@ public partial class App
 
     protected override async void OnStartup(StartupEventArgs e)
     {
-        var onStartupMs = MillisecondsSinceProcessStart();
+        var onStartupMs = StartupClock.ElapsedMilliseconds();
         base.OnStartup(e);
 
         RegisterGlobalExceptionHandlers();
@@ -93,7 +86,7 @@ public partial class App
         _tray.QuitRequested += Quit;
         _tray.SetParentWindow(_trayHost);
         var registered = _tray.Register();
-        var trayShownMs = MillisecondsSinceProcessStart();
+        var trayShownMs = StartupClock.ElapsedMilliseconds();
 
         // Let the shell paint the icon before the heavier startup work below.
         await Dispatcher.Yield(DispatcherPriority.Background);
@@ -154,19 +147,13 @@ public partial class App
         _host = host;
         _logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Trayage.App");
 
-        WireTray(_tray!);
-
-        // Reflect connection + unread state on the tray icon as the inbox changes. Subscribed
-        // before the host starts so the first poll's snapshot can't be missed. Connect and
-        // disconnect both trigger a refresh, so this also catches sign-in/out.
-        host.Services.GetRequiredService<InboxState>().Changed += OnInboxStateChanged;
-        host.Services.GetRequiredService<ProviderRegistry>().Changed += OnProviderRegistryChanged;
-        _tray!.SetReady(true);
-        RefreshTrayStatus();
+        // Before the host starts, so the first poll's snapshot can't be missed.
+        var trayController = new TrayController(host.Services, _tray!, _logger);
+        trayController.Attach();
 
         // The hosted InboxPollingService performs the first (and recurring) refreshes.
         await host.StartAsync();
-        _logger.LogInformation("Host started ({Elapsed} ms after process start).", MillisecondsSinceProcessStart());
+        _logger.LogInformation("Host started ({Elapsed} ms after process start).", StartupClock.ElapsedMilliseconds());
 
         // On the very first launch, pop the inbox flyout so it's obvious Trayage started
         // and where the Settings button is. Shown only once.
@@ -174,7 +161,7 @@ public partial class App
         var settings = settingsStore.Load();
         if (!settings.FirstRunCompleted)
         {
-            Flyout.ShowNearTray();
+            trayController.ShowInbox();
             settings.FirstRunCompleted = true;
             settingsStore.Save(settings);
         }
@@ -210,12 +197,6 @@ public partial class App
         // Build one provider instance per configured account.
         host.Services.GetRequiredService<ProviderRegistry>().Initialize();
         return host;
-    }
-
-    private static long MillisecondsSinceProcessStart()
-    {
-        using var process = System.Diagnostics.Process.GetCurrentProcess();
-        return (long)(DateTime.Now - process.StartTime).TotalMilliseconds;
     }
 
     /// <summary>
@@ -295,24 +276,6 @@ public partial class App
         base.OnExit(e);
     }
 
-    private void WireTray(TrayIconService tray)
-    {
-        tray.LeftClicked += ToggleInboxFlyout;
-        tray.OpenInboxRequested += ShowInboxFlyout;
-        tray.RefreshRequested += RefreshInbox;
-        tray.SettingsRequested += ShowSettings;
-#if DEBUG
-        tray.InjectRequested += InjectItem;
-#endif
-
-        var inboxViewModel = _host!.Services.GetRequiredService<InboxViewModel>();
-        inboxViewModel.OpenSettingsRequested += ShowSettings;
-
-        // Apply inbox display options (grouping / show-read) immediately when toggled.
-        var settingsViewModel = _host.Services.GetRequiredService<SettingsViewModel>();
-        settingsViewModel.InboxDisplayChanged += inboxViewModel.ApplyDisplaySettings;
-    }
-
     private void Quit()
     {
         BeginShutdown();
@@ -375,85 +338,6 @@ public partial class App
         e.Handled = true;
     }
 
-    private InboxFlyout Flyout => _host!.Services.GetRequiredService<InboxFlyout>();
-
-    private void ToggleInboxFlyout() => Flyout.Toggle();
-
-    private void ShowInboxFlyout() => Flyout.ShowNearTray();
-
-    /// <summary>
-    /// Every published snapshot re-renders the tray. The first one also ends the faded
-    /// "syncing" state shown since launch.
-    /// </summary>
-    private void OnInboxStateChanged(object? sender, EventArgs e)
-    {
-        if (!_firstSnapshotReceived)
-        {
-            _firstSnapshotReceived = true;
-            _logger.LogInformation("First inbox snapshot ({Elapsed} ms after process start).", MillisecondsSinceProcessStart());
-        }
-
-        RefreshTrayStatus();
-    }
-
-    /// <summary>Re-renders the tray when accounts are added or removed.</summary>
-    private void OnProviderRegistryChanged(object? sender, EventArgs e) => RefreshTrayStatus();
-
-    private void RefreshInbox()
-    {
-        var inboxService = _host!.Services.GetRequiredService<InboxService>();
-        _ = inboxService.RefreshAsync(CancellationToken.None);
-    }
-
-    /// <summary>
-    /// Recomputes the tray icon state. Grey ("not connected") means no account has been
-    /// set up at all; once at least one account is configured we follow its connection
-    /// flow — amber when unread items wait, green when caught up — even if the live
-    /// session is momentarily unavailable (e.g. before the first poll restores it).
-    /// Connection state is persisted, so this is stable across the startup gap. May be
-    /// called off the UI thread (e.g. from <see cref="InboxState.Changed"/>); the icon
-    /// swap itself is marshalled to the UI thread.
-    /// </summary>
-    private void RefreshTrayStatus()
-    {
-        if (_tray is null || _host is null)
-        {
-            return;
-        }
-
-        var settings = _host.Services.GetRequiredService<ISettingsStore>().Load();
-        var configured = settings.Accounts.Any(a => a.Connected);
-        var liveConnected = _host.Services.GetRequiredService<ProviderRegistry>().All.Any(p => p.IsConnected);
-
-        var inboxState = _host.Services.GetRequiredService<InboxState>();
-
-        // Reason matters for the disconnected glyph: a provider that is configured but has
-        // no live session shows a red "X" (connection problem), while nothing-configured
-        // shows a "?". A live session resolves to the unread/caught-up tray.
-        TrayStatus status;
-        var connectionError = false;
-        if (configured && !_firstSnapshotReceived)
-        {
-            // Accounts exist but the first poll hasn't finished: keep the faded icon rather
-            // than flashing "connection problem" while sessions are still being restored.
-            status = TrayStatus.Syncing;
-        }
-        else if (liveConnected)
-        {
-            status = inboxState.HasUnread ? TrayStatus.Unread : TrayStatus.CaughtUp;
-        }
-        else
-        {
-            status = TrayStatus.Disconnected;
-            connectionError = configured;
-        }
-
-        _tray.SetStatus(status, inboxState.UnreadCount, connectionError);
-    }
-
-    private void ShowSettings() =>
-        _host!.Services.GetRequiredService<SettingsWindow>().ShowAndActivate();
-
     private void OnNotificationInvoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)
         => OpenToastUrl(args);
 
@@ -465,52 +349,4 @@ public partial class App
         }
     }
 
-#if DEBUG
-    // Debug-only developer aid, compiled out of Release/shipping builds. Wired to the tray
-    // "Inject ▸ <provider> ▸ <kind>" menu in WireTray; see TrayIconService for the entries.
-    //
-    // Injects a synthetic item for the chosen provider/kind into the live stream — it lands
-    // in InboxState (so the flyout + tray update immediately) and runs through the real
-    // NotificationRuleEngine + notifier, exactly as the poller does, so you can see how the
-    // pipeline responds to your current settings. The next poll overwrites the snapshot with
-    // real provider data, so the injected item is transient.
-    private void InjectItem(ProviderKind provider, InboxItemKind kind)
-    {
-        var item = SampleItem(provider, kind);
-
-        var state = _host!.Services.GetRequiredService<InboxState>();
-        var settings = _host.Services.GetRequiredService<ISettingsStore>().Load();
-        var rules = _host.Services.GetRequiredService<NotificationRuleEngine>();
-        var notifier = _host.Services.GetRequiredService<IToastNotifier>();
-
-        state.Set(new List<InboxItem>(state.Items) { item });
-
-        foreach (var notifiable in rules.SelectNotifiable(new[] { item }, settings.Notifications, settings.AllWatchedRepositories, DateTimeOffset.UtcNow, InboxRecency.WindowFor(settings)))
-        {
-            notifier.Show(notifiable);
-        }
-    }
-
-    private static InboxItem SampleItem(ProviderKind provider, InboxItemKind kind)
-    {
-        var webUrl = provider switch
-        {
-            ProviderKind.Bitbucket => "https://bitbucket.org/michaelsanford/trayage/pull-requests/1",
-            ProviderKind.GitLab => "https://gitlab.com/michaelsanford/trayage/-/merge_requests/1",
-            _ => "https://github.com/michaelsanford/Trayage/pull/1",
-        };
-
-        return new()
-        {
-            Id = $"debug-{provider}-{kind}-{DateTimeOffset.UtcNow.Ticks}",
-            Provider = provider,
-            AccountId = "debug",
-            Kind = kind,
-            Title = $"[debug] {provider} {kind} — click me",
-            RepositoryFullName = "michaelsanford/Trayage",
-            WebUrl = webUrl,
-            UpdatedAt = DateTimeOffset.UtcNow,
-        };
-    }
-#endif
 }
