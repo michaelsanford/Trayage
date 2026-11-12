@@ -30,11 +30,17 @@ public sealed class TrayIconService : NotifyIconService
     private static readonly Uri CaughtUpIconUri = new("pack://application:,,,/Assets/trayage-caughtup.ico", UriKind.Absolute);
     private static readonly Uri UnreadIconUri = new("pack://application:,,,/Assets/trayage-unread.ico", UriKind.Absolute);
     private static readonly Uri ErrorIconUri = new("pack://application:,,,/Assets/trayage-error.ico", UriKind.Absolute);
+    private static readonly Uri StartingIconUri = new("pack://application:,,,/Assets/trayage-starting.ico", UriKind.Absolute);
 
-    private readonly ImageSource _disconnectedIcon = new BitmapImage(DisconnectedIconUri);
-    private readonly ImageSource _caughtUpIcon = new BitmapImage(CaughtUpIconUri);
-    private readonly ImageSource _unreadIcon = new BitmapImage(UnreadIconUri);
-    private readonly ImageSource _errorIcon = new BitmapImage(ErrorIconUri);
+    private readonly ImageSource _disconnectedIcon = LoadIcon(DisconnectedIconUri);
+    private readonly ImageSource _caughtUpIcon = LoadIcon(CaughtUpIconUri);
+    private readonly ImageSource _unreadIcon = LoadIcon(UnreadIconUri);
+    private readonly ImageSource _errorIcon = LoadIcon(ErrorIconUri);
+    private readonly ImageSource _startingIcon = LoadIcon(StartingIconUri);
+
+    // Menu entries that need the host (inbox, refresh, settings); disabled until SetReady(true).
+    private readonly List<MenuItem> _hostDependentItems = [];
+    private bool _ready;
 
     public event Action? LeftClicked;
     public event Action? OpenInboxRequested;
@@ -46,11 +52,31 @@ public sealed class TrayIconService : NotifyIconService
     public event Action<ProviderKind, InboxItemKind>? InjectRequested;
 #endif
 
+    /// <summary>
+    /// Created before the generic host exists, so the icon can be shown the moment the process
+    /// starts: it opens in the faded <see cref="TrayStatus.Starting"/> state with only Quit
+    /// enabled, and the app calls <see cref="SetReady"/> once the host is up.
+    /// </summary>
     public TrayIconService()
     {
-        TooltipText = "Trayage — not connected";
-        Icon = _disconnectedIcon;
+        TooltipText = TooltipFor(TrayStatus.Starting, 0, false);
+        Icon = _startingIcon;
         ContextMenu = BuildContextMenu();
+        SetReady(false);
+    }
+
+    /// <summary>
+    /// Enables the menu entries and left-click that need the host (inbox, refresh, settings).
+    /// Quit is always available, so a slow or failed startup can still be exited from the tray.
+    /// Must be called on the UI thread.
+    /// </summary>
+    public void SetReady(bool ready)
+    {
+        _ready = ready;
+        foreach (var item in _hostDependentItems)
+        {
+            item.IsEnabled = ready;
+        }
     }
 
     /// <summary>
@@ -69,26 +95,57 @@ public sealed class TrayIconService : NotifyIconService
             return;
         }
 
-        dispatcher.Invoke(() =>
+        // Called from the poller's thread on every inbox change: post rather than block it on
+        // a UI round-trip. On the UI thread already, apply inline so the order is preserved.
+        if (dispatcher.CheckAccess())
         {
-            Icon = (status, connectionError) switch
+            Apply();
+        }
+        else
+        {
+            _ = dispatcher.InvokeAsync(Apply);
+        }
+
+        void Apply()
+        {
+            var icon = (status, connectionError) switch
             {
+                (TrayStatus.Starting or TrayStatus.Syncing, _) => _startingIcon,
                 (TrayStatus.Unread, _) => _unreadIcon,
                 (TrayStatus.CaughtUp, _) => _caughtUpIcon,
-                (TrayStatus.Disconnected, true) => _errorIcon,
+                (TrayStatus.Disconnected, true) or (TrayStatus.Failed, _) => _errorIcon,
                 _ => _disconnectedIcon,
             };
+            var tooltip = TooltipFor(status, unreadCount, connectionError);
 
-            TooltipText = (status, connectionError) switch
+            // Every poll lands here; skip the two reflective NIM_MODIFY calls when nothing changed.
+            if (ReferenceEquals(icon, Icon) && tooltip == TooltipText)
             {
-                (TrayStatus.Unread, _) => unreadCount > 0 ? $"Trayage — {unreadCount} waiting" : "Trayage — items waiting",
-                (TrayStatus.CaughtUp, _) => "Trayage — all caught up",
-                (TrayStatus.Disconnected, true) => "Trayage — connection problem",
-                _ => "Trayage — not connected",
-            };
+                return;
+            }
 
+            Icon = icon;
+            TooltipText = tooltip;
             PushToShell();
-        });
+        }
+    }
+
+    private static string TooltipFor(TrayStatus status, int unreadCount, bool connectionError) => (status, connectionError) switch
+    {
+        (TrayStatus.Starting, _) => "Trayage — starting…",
+        (TrayStatus.Syncing, _) => "Trayage — syncing…",
+        (TrayStatus.Unread, _) => unreadCount > 0 ? $"Trayage — {unreadCount} waiting" : "Trayage — items waiting",
+        (TrayStatus.CaughtUp, _) => "Trayage — all caught up",
+        (TrayStatus.Disconnected, true) => "Trayage — connection problem",
+        (TrayStatus.Failed, _) => "Trayage — failed to start",
+        _ => "Trayage — not connected",
+    };
+
+    private static BitmapImage LoadIcon(Uri uri)
+    {
+        var image = new BitmapImage(uri);
+        image.Freeze();
+        return image;
     }
 
     /// <summary>
@@ -111,20 +168,26 @@ public sealed class TrayIconService : NotifyIconService
         _ = _modifyToolTip?.Invoke(manager, null);
     }
 
-    protected override void OnLeftClick() => LeftClicked?.Invoke();
+    protected override void OnLeftClick()
+    {
+        if (_ready)
+        {
+            LeftClicked?.Invoke();
+        }
+    }
 
     private ContextMenu BuildContextMenu()
     {
         var menu = new ContextMenu();
-        menu.Items.Add(CreateItem("Open inbox", () => OpenInboxRequested?.Invoke()));
-        menu.Items.Add(CreateItem("Refresh now", () => RefreshRequested?.Invoke()));
+        menu.Items.Add(HostDependent(CreateItem("Open inbox", () => OpenInboxRequested?.Invoke())));
+        menu.Items.Add(HostDependent(CreateItem("Refresh now", () => RefreshRequested?.Invoke())));
         menu.Items.Add(new Separator());
-        menu.Items.Add(CreateItem("Settings…", () => SettingsRequested?.Invoke()));
+        menu.Items.Add(HostDependent(CreateItem("Settings…", () => SettingsRequested?.Invoke())));
         menu.Items.Add(new Separator());
 #if DEBUG
         // Debug-only developer aid (compiled out of Release/shipping builds): inject a
         // synthetic item for a given provider/kind to exercise the notification pipeline.
-        menu.Items.Add(BuildInjectMenu());
+        menu.Items.Add(HostDependent(BuildInjectMenu()));
         menu.Items.Add(new Separator());
 #endif
         menu.Items.Add(CreateItem("Quit Trayage", () => QuitRequested?.Invoke()));
@@ -175,6 +238,12 @@ public sealed class TrayIconService : NotifyIconService
         return menu;
     }
 #endif
+
+    private MenuItem HostDependent(MenuItem item)
+    {
+        _hostDependentItems.Add(item);
+        return item;
+    }
 
     private static MenuItem CreateItem(string header, Action onClick)
     {
