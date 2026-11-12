@@ -8,20 +8,25 @@ namespace Trayage.Core.Inbox;
 /// </summary>
 public sealed class InboxState
 {
-    private volatile IReadOnlyList<InboxItem> _items = Array.Empty<InboxItem>();
+    // Items and their unread count swap together, so readers never see one without the other.
+    private volatile Snapshot _snapshot = new(Array.Empty<InboxItem>(), 0);
 
-    public IReadOnlyList<InboxItem> Items => _items;
+    public IReadOnlyList<InboxItem> Items => _snapshot.Items;
 
-    public int UnreadCount => _items.Count(i => i.IsUnread);
+    /// <summary>Counted once per snapshot; the tray reads it on every change.</summary>
+    public int UnreadCount => _snapshot.UnreadCount;
 
-    public bool HasUnread => _items.Any(i => i.IsUnread);
+    public bool HasUnread => _snapshot.UnreadCount > 0;
 
     /// <summary>Raised after the snapshot is replaced. May fire on a background thread.</summary>
     public event EventHandler? Changed;
 
     public void Set(IReadOnlyList<InboxItem>? items)
     {
-        _items = items ?? Array.Empty<InboxItem>();
+        var snapshot = items ?? Array.Empty<InboxItem>();
+        _snapshot = new Snapshot(snapshot, snapshot.Count(i => i.IsUnread));
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    private sealed record Snapshot(IReadOnlyList<InboxItem> Items, int UnreadCount);
 }

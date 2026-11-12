@@ -79,7 +79,9 @@ public sealed class InboxServiceTests
         provider.FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>())
             .Returns<Task<IReadOnlyList<InboxItem>>>(_ => throw new OperationCanceledException(token));
 
-        await Assert.ThrowsAsync<OperationCanceledException>(
+        // Any OperationCanceledException: an already-cancelled token can surface as the
+        // TaskCanceledException subclass from the refresh gate before a fetch even starts.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => NewService(provider).RefreshAsync(token));
     }
 
@@ -234,5 +236,93 @@ public sealed class InboxServiceTests
         var only = Assert.Single(result.Items);
         Assert.False(only.IsUnread);
         Assert.True(only.IsExplicitlyRead);
+    }
+
+    /// <summary>
+    /// Dropping a failed account's items would make the poller see all of them as new — and
+    /// notify again — as soon as the account recovered.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WhenAnAccountFails_KeepsItsLastKnownItems()
+    {
+        var fails = false;
+        var provider = TestProviders.Stub(ProviderKind.GitLab, accountId: "gl");
+        provider.FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>())
+            .Returns(_ => fails
+                ? throw new HttpRequestException("down")
+                : Task.FromResult<IReadOnlyList<InboxItem>>([TestData.Item("gl1", ProviderKind.GitLab, accountId: "gl")]));
+        var healthy = Provider(ProviderKind.GitHub, items: TestData.Item("gh1", accountId: "GitHub"));
+        var service = NewService(provider, healthy);
+        await service.RefreshAsync(CancellationToken.None);
+
+        fails = true;
+        var result = await service.RefreshAsync(CancellationToken.None);
+
+        Assert.Equal(["gh1", "gl1"], result.Items.Select(i => i.Id).Order());
+        Assert.Equal("gl", Assert.Single(result.Failures).AccountId);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_FetchesAccountsConcurrently_AndMergesInRegistryOrder()
+    {
+        var bothStarted = new TaskCompletionSource();
+        var started = 0;
+        IInboxProvider Blocking(ProviderKind kind, string id) =>
+            BlockingProvider(kind, id, async () =>
+            {
+                if (Interlocked.Increment(ref started) == 2)
+                {
+                    bothStarted.SetResult();
+                }
+
+                // Only completes if the other account's fetch is in flight at the same time.
+                await bothStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            });
+
+        var result = await NewService(Blocking(ProviderKind.GitHub, "a"), Blocking(ProviderKind.GitLab, "b"))
+            .RefreshAsync(CancellationToken.None);
+
+        Assert.Equal(2, result.Items.Count);
+        Assert.Empty(result.Failures);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_OverlappingCalls_CoalesceIntoOneFollowUpFetch()
+    {
+        var release = new TaskCompletionSource();
+        var fetches = 0;
+        var provider = BlockingProvider(ProviderKind.GitHub, "a", async () =>
+        {
+            if (Interlocked.Increment(ref fetches) == 1)
+            {
+                await release.Task;
+            }
+        });
+        var service = NewService(provider);
+
+        var first = service.RefreshAsync(CancellationToken.None);
+        // These arrive while the first fetch is still running, so it may predate whatever change
+        // prompted them: they need one more fetch, but only one between them.
+        var waiting = Enumerable.Range(0, 5).Select(_ => service.RefreshAsync(CancellationToken.None)).ToList();
+        release.SetResult();
+
+        await first;
+        var results = await Task.WhenAll(waiting);
+
+        Assert.Equal(2, fetches);
+        Assert.All(results, r => Assert.Same(results[0], r));
+    }
+
+    /// <summary>A connected provider whose fetch runs <paramref name="during"/> and then returns one item.</summary>
+    private static IInboxProvider BlockingProvider(ProviderKind kind, string accountId, Func<Task> during)
+    {
+        var provider = TestProviders.Stub(kind, accountId);
+        provider.FetchInboxAsync(Arg.Any<InboxQuery>(), Arg.Any<CancellationToken>())
+            .Returns(async _ =>
+            {
+                await during();
+                return (IReadOnlyList<InboxItem>)[TestData.Item($"{accountId}-1", kind, accountId: accountId)];
+            });
+        return provider;
     }
 }
