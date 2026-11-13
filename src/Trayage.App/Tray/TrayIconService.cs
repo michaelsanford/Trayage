@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -14,7 +15,7 @@ namespace Trayage.App.Tray;
 /// Owns the Windows notification-area (system tray) icon and its context menu.
 /// Raises events for menu actions so the host can wire them to application behaviour.
 /// </summary>
-public sealed class TrayIconService : NotifyIconService
+public sealed partial class TrayIconService : NotifyIconService
 {
     // WPF-UI's NotifyIconService.Icon/TooltipText are plain auto-properties: setting them
     // after Register() does NOT update the live shell icon. The refresh methods
@@ -26,6 +27,8 @@ public sealed class TrayIconService : NotifyIconService
 
     private MethodInfo? _modifyIcon;
     private MethodInfo? _modifyToolTip;
+    private PropertyInfo? _shellIconData;
+    private FieldInfo? _hIcon;
     private static readonly Uri DisconnectedIconUri = new("pack://application:,,,/Assets/trayage-disconnected.ico", UriKind.Absolute);
     private static readonly Uri CaughtUpIconUri = new("pack://application:,,,/Assets/trayage-caughtup.ico", UriKind.Absolute);
     private static readonly Uri UnreadIconUri = new("pack://application:,,,/Assets/trayage-unread.ico", UriKind.Absolute);
@@ -124,9 +127,10 @@ public sealed class TrayIconService : NotifyIconService
                 return;
             }
 
+            var iconChanged = !ReferenceEquals(icon, Icon);
             Icon = icon;
             TooltipText = tooltip;
-            PushToShell();
+            PushToShell(iconChanged);
         }
     }
 
@@ -152,9 +156,10 @@ public sealed class TrayIconService : NotifyIconService
     /// Pushes the current <see cref="NotifyIconService.Icon"/> and
     /// <see cref="NotifyIconService.TooltipText"/> to the live shell icon. A no-op until
     /// the icon is registered (Register() reads the initial values) and degrades to a
-    /// no-op if WPF-UI's internals ever change shape.
+    /// no-op if WPF-UI's internals ever change shape. The icon is only re-sent when
+    /// <paramref name="iconChanged"/>, e.g. not when just the unread count in the tooltip moved.
     /// </summary>
-    private void PushToShell()
+    private void PushToShell(bool iconChanged)
     {
         if (!IsRegistered || ManagerField?.GetValue(this) is not { } manager)
         {
@@ -164,9 +169,43 @@ public sealed class TrayIconService : NotifyIconService
         var managerType = manager.GetType();
         _modifyIcon ??= managerType.GetMethod("ModifyIcon", Type.EmptyTypes);
         _modifyToolTip ??= managerType.GetMethod("ModifyToolTip", Type.EmptyTypes);
-        _ = _modifyIcon?.Invoke(manager, null);
+        _shellIconData ??= managerType.GetProperty("ShellIconData");
+        _hIcon ??= _shellIconData?.PropertyType.GetField("hIcon");
+
+        if (iconChanged)
+        {
+            ReplaceShellIcon(manager);
+        }
+
         _ = _modifyToolTip?.Invoke(manager, null);
     }
+
+    /// <summary>
+    /// ModifyIcon converts Icon to a brand-new HICON (Bitmap.GetHicon) on every call and never
+    /// frees the one it replaces, so every icon swap would leak a USER/GDI icon handle for the
+    /// life of the process. The shell keeps its own copy after NIM_MODIFY, so the replaced
+    /// handle is ours to destroy. Every Icon we set is a BitmapSource, so that handle always
+    /// came from GetHicon, never from a System.Drawing.Icon that would free it again.
+    /// </summary>
+    private void ReplaceShellIcon(object manager)
+    {
+        var previous = CurrentHicon(manager);
+        _ = _modifyIcon?.Invoke(manager, null);
+        var current = CurrentHicon(manager);
+        if (previous != 0 && previous != current)
+        {
+            _ = DestroyIcon(previous);
+        }
+    }
+
+    private nint CurrentHicon(object manager) =>
+        _hIcon is not null && _shellIconData?.GetValue(manager) is { } data && _hIcon.GetValue(data) is nint handle
+            ? handle
+            : 0;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DestroyIcon(nint hIcon);
 
     protected override void OnLeftClick()
     {
