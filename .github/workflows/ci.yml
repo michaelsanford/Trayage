@@ -6,7 +6,8 @@ on:
     # Only on main: PR branches are validated by the pull_request trigger below, so
     # restricting push to main avoids running every job twice on a branch with an open PR.
     branches: [main]
-    # Only build-relevant changes; docs, assets, tools, .github/**, *.ps1, LICENSE don't trigger CI.
+    # Only build-relevant changes (plus this workflow and its tool manifest); docs, assets,
+    # tools, other .github/** files, *.ps1 and LICENSE don't trigger CI.
     paths:
       - 'src/**'
       - 'tests/**'
@@ -15,6 +16,8 @@ on:
       - 'Directory.Build.props'
       - 'global.json'
       - 'nuget.config'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
     paths:
@@ -25,6 +28,8 @@ on:
       - 'Directory.Build.props'
       - 'global.json'
       - 'nuget.config'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
