@@ -118,7 +118,7 @@ public sealed class InboxItemViewModel
 
     private string BuildSubtitle(InboxGrouping grouping)
     {
-        var parts = new List<string>(3);
+        List<string> parts = [with(capacity: 3)];
 
         // Say as much of the repository as the group header leaves unsaid.
         var repo = grouping switch

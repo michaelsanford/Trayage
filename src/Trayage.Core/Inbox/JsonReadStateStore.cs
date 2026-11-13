@@ -147,7 +147,7 @@ public sealed class JsonReadStateStore : IReadStateStore
 
         if (!File.Exists(_filePath))
         {
-            return _marks = new Dictionary<string, ReadMark>(StringComparer.Ordinal);
+            return _marks = [with(StringComparer.Ordinal)];
         }
 
         try
@@ -162,7 +162,7 @@ public sealed class JsonReadStateStore : IReadStateStore
         {
             // Losing read marks is a cosmetic setback, not worth failing a poll over.
             _logger.LogWarning(ex, "Failed to read read-state from {Path}; starting empty.", _filePath);
-            return _marks = new Dictionary<string, ReadMark>(StringComparer.Ordinal);
+            return _marks = [with(StringComparer.Ordinal)];
         }
     }
 

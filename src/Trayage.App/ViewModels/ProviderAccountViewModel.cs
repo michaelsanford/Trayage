@@ -353,7 +353,7 @@ public sealed partial class ProviderAccountViewModel : ObservableObject
             _populatingRepos = true;
             RepoOptions.Clear();
             var watched = new HashSet<string>(WatchedRepositories, StringComparer.OrdinalIgnoreCase);
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> seen = [with(StringComparer.OrdinalIgnoreCase)];
 
             foreach (var repo in result.Repositories)
             {

@@ -73,7 +73,7 @@ public static partial class NotificationSoundCatalog
             // No bundled sounds; the system sounds still work.
         }
 
-        return [.. bundled, .. SystemSounds];
+        return (NotificationSoundOption[])[.. bundled, .. SystemSounds];
     }
 
     // The three "Third" chimes read best high → mid → low, not alphabetically.

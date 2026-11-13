@@ -255,7 +255,7 @@ public sealed class BitbucketProvider : IInboxProvider
 
         // A PR is keyed by repo + id, so the same PR can't come back twice from one query, but
         // two watched names can resolve to the same repo; keep one of each.
-        var byId = new Dictionary<string, InboxItem>(StringComparer.Ordinal);
+        Dictionary<string, InboxItem> byId = [with(StringComparer.Ordinal)];
         foreach (var item in results.SelectMany(r => r.Items))
         {
             byId[item.Id] = item;
@@ -318,7 +318,7 @@ public sealed class BitbucketProvider : IInboxProvider
             var perWorkspace = await Task.WhenAll(tasks).ConfigureAwait(false);
 
             // Dedupe by full name (defensive), then most-recently-updated first.
-            var byName = new Dictionary<string, BitbucketRepositorySummary>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, BitbucketRepositorySummary> byName = [with(StringComparer.OrdinalIgnoreCase)];
             foreach (var repo in perWorkspace.SelectMany(r => r.Repositories))
             {
                 if (!string.IsNullOrEmpty(repo.FullName))
