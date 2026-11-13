@@ -26,6 +26,11 @@ updates:
           - "Microsoft.NET.Test.Sdk"
           - "NSubstitute"
           - "coverlet.*"
+      # CI/release tools from .config/dotnet-tools.json (coverage report, SBOM).
+      dotnet-tools:
+        patterns:
+          - "dotnet-reportgenerator-globaltool"
+          - "cyclonedx"
 
   # Workflow actions. They're pinned to commit SHAs with a `# vX.Y.Z` comment;
   # Dependabot updates both.

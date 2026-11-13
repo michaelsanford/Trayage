@@ -122,8 +122,8 @@ jobs:
 
       - name: Generate CycloneDX SBOM
         run: |
-          dotnet tool install --global CycloneDX --version 6.3.1
-          dotnet-CycloneDX src/Trayage.App/Trayage.App.csproj -o sbom -fn trayage-${{ github.ref_name }}-sbom.cdx.json -F Json
+          dotnet tool restore
+          dotnet tool run dotnet-CycloneDX src/Trayage.App/Trayage.App.csproj -o sbom -fn trayage-${{ github.ref_name }}-sbom.cdx.json -F Json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
