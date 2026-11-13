@@ -170,7 +170,7 @@ public sealed class InboxService(
         state.Set(readState.Apply(state.Items));
 
         var providers = registry.Active.ToDictionary(p => p.AccountId, StringComparer.Ordinal);
-        var notices = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> notices = [with(StringComparer.Ordinal)];
         using var gate = new SemaphoreSlim(MaxConcurrentMarkWrites);
 
         var writes = unread.Select(async item =>

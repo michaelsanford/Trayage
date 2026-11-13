@@ -102,7 +102,7 @@ public sealed class DpapiSecretStore(ILogger<DpapiSecretStore> logger, string? f
 
         if (!File.Exists(_filePath))
         {
-            return _map = new Dictionary<string, string>(StringComparer.Ordinal);
+            return _map = [with(StringComparer.Ordinal)];
         }
 
         string json;
@@ -142,7 +142,7 @@ public sealed class DpapiSecretStore(ILogger<DpapiSecretStore> logger, string? f
                 throw;
             }
 
-            return _map = new Dictionary<string, string>(StringComparer.Ordinal);
+            return _map = [with(StringComparer.Ordinal)];
         }
     }
 
@@ -161,7 +161,7 @@ public sealed class DpapiSecretStore(ILogger<DpapiSecretStore> logger, string? f
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new Dictionary<string, string>(StringComparer.Ordinal);
+            return [with(StringComparer.Ordinal)];
         }
     }
 }

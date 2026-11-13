@@ -290,7 +290,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         try
         {
-            Process.Start(new ProcessStartInfo(TrayagePaths.LogDirectory) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(TrayagePaths.LogDirectory) { UseShellExecute = true })?.Dispose();
         }
         catch (Exception)
         {
