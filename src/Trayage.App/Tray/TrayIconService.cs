@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Wpf.Ui.Tray;
@@ -29,6 +30,11 @@ public sealed partial class TrayIconService : NotifyIconService
     private MethodInfo? _modifyToolTip;
     private PropertyInfo? _shellIconData;
     private FieldInfo? _hIcon;
+
+    // Broadcast to every top-level window when Explorer (re)creates the taskbar, e.g. after it
+    // crashes or is restarted. Icons from the old shell are gone and must be added again.
+    private static readonly uint TaskbarCreatedMessage = RegisterWindowMessage("TaskbarCreated");
+    private HwndSource? _shellRestartSource;
     private static readonly Uri DisconnectedIconUri = new("pack://application:,,,/Assets/trayage-disconnected.ico", UriKind.Absolute);
     private static readonly Uri CaughtUpIconUri = new("pack://application:,,,/Assets/trayage-caughtup.ico", UriKind.Absolute);
     private static readonly Uri UnreadIconUri = new("pack://application:,,,/Assets/trayage-unread.ico", UriKind.Absolute);
@@ -50,6 +56,12 @@ public sealed partial class TrayIconService : NotifyIconService
     public event Action? RefreshRequested;
     public event Action? SettingsRequested;
     public event Action? QuitRequested;
+
+    /// <summary>
+    /// Raised on the UI thread after Explorer restarted and the icon was re-added; the argument
+    /// is whether re-registration succeeded.
+    /// </summary>
+    public event Action<bool>? ShellIconRestored;
 #if DEBUG
     /// <summary>Debug-only developer aid: injects a synthetic item of the given provider/kind into the live stream.</summary>
     public event Action<ProviderKind, InboxItemKind>? InjectRequested;
@@ -134,6 +146,70 @@ public sealed partial class TrayIconService : NotifyIconService
         }
     }
 
+    /// <summary>
+    /// Re-adds the icon whenever Explorer restarts. WPF-UI.Tray doesn't listen for
+    /// <c>TaskbarCreated</c>, so without this the icon silently vanishes until Trayage is
+    /// relaunched. Call once, after <see cref="NotifyIconService.SetParentWindow"/>; the
+    /// broadcast only reaches top-level windows, so the hidden parent (host) window is
+    /// hooked rather than WPF-UI's own message window.
+    /// </summary>
+    public void RestoreAfterShellRestart()
+    {
+        if (_shellRestartSource is not null || TaskbarCreatedMessage == 0 ||
+            ParentWindow is null || PresentationSource.FromVisual(ParentWindow) is not HwndSource source)
+        {
+            return;
+        }
+
+        _shellRestartSource = source;
+        source.AddHook(OnHostWindowMessage);
+    }
+
+    private nint OnHostWindowMessage(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        // Not registered means never shown or already quitting: leave it that way.
+        if ((uint)msg == TaskbarCreatedMessage && IsRegistered)
+        {
+            ShellIconRestored?.Invoke(ReRegister());
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Register() on an already-registered icon builds a new hook window and HICON and sends
+    /// NIM_ADD to the new shell, but abandons the previous window and handle. Free both. The
+    /// old window still carries WPF-UI's WndProc, whose WM_DESTROY handling disposes the
+    /// manager (NIM_DELETE on the icon just re-added), so that hook is detached first.
+    /// </summary>
+    private bool ReRegister()
+    {
+        var manager = ManagerField?.GetValue(this);
+        var hookProperty = manager?.GetType().GetProperty("HookWindow");
+        _shellIconData ??= manager?.GetType().GetProperty("ShellIconData");
+        _hIcon ??= _shellIconData?.PropertyType.GetField("hIcon");
+
+        var previousIcon = manager is null ? 0 : CurrentHicon(manager);
+        var previousHook = hookProperty?.GetValue(manager) as HwndSource;
+
+        var registered = Register();
+
+        if (manager is not null && previousIcon != 0 && previousIcon != CurrentHicon(manager))
+        {
+            _ = DestroyIcon(previousIcon);
+        }
+
+        if (manager is not null && previousHook is not null &&
+            !ReferenceEquals(previousHook, hookProperty?.GetValue(manager)) &&
+            Delegate.CreateDelegate(typeof(HwndSourceHook), manager, "WndProc", ignoreCase: false, throwOnBindFailure: false) is HwndSourceHook managerHook)
+        {
+            previousHook.RemoveHook(managerHook);
+            previousHook.Dispose();
+        }
+
+        return registered;
+    }
+
     private static string TooltipFor(TrayStatus status, int unreadCount, bool connectionError) => (status, connectionError) switch
     {
         (TrayStatus.Starting, _) => "Trayage — starting…",
@@ -206,6 +282,9 @@ public sealed partial class TrayIconService : NotifyIconService
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool DestroyIcon(nint hIcon);
+
+    [LibraryImport("user32.dll", EntryPoint = "RegisterWindowMessageW", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial uint RegisterWindowMessage(string lpString);
 
     protected override void OnLeftClick()
     {

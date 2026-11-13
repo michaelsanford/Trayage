@@ -81,7 +81,7 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
 - **Tray icon** — three descending priority bars (a sorted queue) whose tint reflects state:
   blue with an **amber top bar** when items are waiting, plain blue when you're caught up,
   **grey** when nothing is connected, and **red** when an account is configured but has no
-  live session.
+  live session. The icon comes back on its own if Explorer restarts.
 - **Settings** window with five pages — **Accounts**, **Notifications**, **Inbox**,
   **General**, and **About**. **Accounts** is the list of connected accounts: expand one to
   rename it, pause it, disconnect or remove it, pick its watched repositories (Bitbucket), or
