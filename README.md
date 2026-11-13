@@ -268,7 +268,14 @@ sheet of every variant in `tools/preview/` for review. Re-run the script after c
 
 Issues and pull requests are welcome. For bugs and feature requests, please use the
 [issue templates](.github/ISSUE_TEMPLATE) — they pre-fill the details that make triage fast.
-Run `dotnet build` and `dotnet test` before opening a PR. By participating you agree to the
+Run `dotnet build` and `dotnet test` before opening a PR.
+
+NuGet dependencies are pinned in committed `packages.lock.json` files and CI restores in locked
+mode, so after changing a `PackageReference` run `dotnet restore --force-evaluate` and commit the
+updated lock files. The SDK version is pinned in `global.json`. [Dependabot](.github/dependabot.yml)
+opens weekly PRs for NuGet packages and GitHub Actions (actions stay pinned to commit SHAs).
+
+By participating you agree to the
 [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security

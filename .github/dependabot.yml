@@ -1,0 +1,42 @@
+version: 2
+
+updates:
+  # NuGet packages across the solution. Dependabot also refreshes the committed
+  # packages.lock.json files so CI's `dotnet restore --locked-mode` keeps passing.
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # Runtime-aligned packages move together with the .NET release.
+      microsoft-extensions:
+        patterns:
+          - "Microsoft.Extensions.*"
+          - "System.*"
+      wpf-ui:
+        patterns:
+          - "WPF-UI*"
+      test:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+          - "NSubstitute"
+          - "coverlet.*"
+
+  # Workflow actions. They're pinned to commit SHAs with a `# vX.Y.Z` comment;
+  # Dependabot updates both.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns:
+          - "*"
