@@ -38,9 +38,9 @@ jobs:
       pull-requests: write   # for the coverage comment on PRs only
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '11.x'
 
@@ -59,7 +59,7 @@ jobs:
         if: always()        # still report when a test fails
         shell: pwsh
         run: |
-          dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.5.10
+          dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.6.0
           reportgenerator -reports:TestResults/**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:"MarkdownSummaryGithub"
 
       - name: Publish coverage to job summary
@@ -84,9 +84,9 @@ jobs:
         rid: [win-x64, win-arm64]   # win-x64 = amd64
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '11.x'
 
