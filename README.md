@@ -9,7 +9,7 @@
 [![CodeQL](https://github.com/michaelsanford/Trayage/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/github-code-scanning/codeql)
 [![Release](https://github.com/michaelsanford/Trayage/actions/workflows/release.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/release.yml)
 
-[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![.NET 11](https://img.shields.io/badge/.NET-11.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windows11&logoColor=white)](#requirements)
 [![License: MIT](https://img.shields.io/github/license/michaelsanford/Trayage?color=blue)](LICENSE)
 [![Mirror](https://github.com/michaelsanford/Trayage/actions/workflows/mirror.yml/badge.svg)](https://github.com/michaelsanford/Trayage/actions/workflows/mirror.yml)
@@ -19,13 +19,13 @@
 [![SBOM](https://img.shields.io/badge/SBOM-CycloneDX-blueviolet)](#verifying-a-release)
 [![Signed](https://img.shields.io/badge/signed-cosign-2ea44f?logo=sigstore&logoColor=white)](#verifying-a-release)
 
-A .NET 10 Windows system-tray app that gathers your **GitHub**, **Bitbucket Cloud**, and
+A .NET 11 Windows system-tray app that gathers your **GitHub**, **Bitbucket Cloud**, and
 **GitLab.com** activity into one unified inbox, lets you jump straight to the relevant page
 with a click, and raises native Windows toast notifications for the things you care about.
 
 Trayage is the successor to [bittray](https://github.com/michaelsanford/bittray) — a Go
 tray app that watched Bitbucket Server for pull requests needing review. Trayage modernises
-the idea on .NET 10 with a Fluent (Windows 11) UI, adds GitHub, and broadens "needs review"
+the idea on .NET 11 with a Fluent (Windows 11) UI, adds GitHub, and broadens "needs review"
 into a configurable inbox.
 
 **Website:** https://www.michaelsanford.com/Trayage/
@@ -94,9 +94,9 @@ Each release ships with build provenance, a cosign signature, and a CycloneDX SB
 
 ## Requirements
 
-- Windows 10 (1809+) or Windows 11 (the app targets `net10.0-windows10.0.19041.0` and uses
+- Windows 10 (1809+) or Windows 11 (the app targets `net11.0-windows10.0.19041.0` and uses
   WPF + WinRT toast APIs, so it builds and runs on Windows only)
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) to build (or the .NET 10 Desktop
+- [.NET 11 SDK](https://dotnet.microsoft.com/download) to build (or the .NET 11 Desktop
   Runtime to run a framework-dependent build)
 
 ## Build & run
