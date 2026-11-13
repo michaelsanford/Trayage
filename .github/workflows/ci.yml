@@ -59,8 +59,8 @@ jobs:
         if: always()        # still report when a test fails
         shell: pwsh
         run: |
-          dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.6.0
-          reportgenerator -reports:TestResults/**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:"MarkdownSummaryGithub"
+          dotnet tool restore
+          dotnet tool run reportgenerator -reports:TestResults/**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:"MarkdownSummaryGithub"
 
       - name: Publish coverage to job summary
         if: always()

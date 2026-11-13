@@ -273,7 +273,9 @@ Run `dotnet build` and `dotnet test` before opening a PR.
 NuGet dependencies are pinned in committed `packages.lock.json` files and CI restores in locked
 mode, so after changing a `PackageReference` run `dotnet restore --force-evaluate` and commit the
 updated lock files. The SDK version is pinned in `global.json`. [Dependabot](.github/dependabot.yml)
-opens weekly PRs for NuGet packages and GitHub Actions (actions stay pinned to commit SHAs).
+opens weekly PRs for NuGet packages, the CI tools in `.config/dotnet-tools.json`, and GitHub
+Actions (actions stay pinned to commit SHAs). Run `dotnet tool restore` to get the same
+ReportGenerator and CycloneDX versions CI uses.
 
 By participating you agree to the
 [Code of Conduct](CODE_OF_CONDUCT.md).
