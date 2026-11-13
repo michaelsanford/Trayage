@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.Configuration;
@@ -87,6 +87,8 @@ public partial class App
         _tray.SetParentWindow(_trayHost);
         var registered = _tray.Register();
         var trayShownMs = StartupClock.ElapsedMilliseconds();
+        _tray.ShellIconRestored += ok => _logger.LogInformation("Explorer restarted; tray icon re-added: {Registered}.", ok);
+        _tray.RestoreAfterShellRestart();
 
         // Let the shell paint the icon before the heavier startup work below.
         await Dispatcher.Yield(DispatcherPriority.Background);
