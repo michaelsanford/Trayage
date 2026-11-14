@@ -4,92 +4,68 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- This page uses no scripts and makes no API calls, so the policy is stricter
-       than the landing page: deny everything but self, data-URI images, and fonts. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; form-action 'none'; frame-ancestors 'none'" />
+  <!-- This page uses no scripts, makes no API calls and loads no web fonts, so the
+       policy is stricter than the landing page: deny everything but self and
+       data-URI images. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; img-src 'self' data:; style-src 'self'; form-action 'none'; frame-ancestors 'none'" />
   <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), usb=(), serial=(), hid=(), bluetooth=(), midi=(), payment=(), accelerometer=(), gyroscope=(), magnetometer=(), display-capture=(), autoplay=()" />
 
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="color-scheme" content="dark" />
-  <meta name="description" content="Trayage privacy policy — Trayage collects nothing. No analytics, no telemetry, no servers." />
+  <meta name="description" content="Trayage privacy policy. Trayage has no analytics, no telemetry and no servers, and collects no data." />
 
-  <title>Privacy — Trayage</title>
+  <title>Privacy: Trayage</title>
 
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23161b23'/%3E%3Ctext x='16' y='22' font-family='Georgia,serif' font-size='18' font-weight='bold' fill='%23f1b24a' text-anchor='middle'%3ET%3C/text%3E%3C/svg%3E" />
-
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23202020'/%3E%3Cg stroke-width='4.32' stroke-linecap='round'%3E%3Cline x1='6.4' y1='9.6' x2='26.88' y2='9.6' stroke='%23ffd587'/%3E%3Cline x1='6.4' y1='16' x2='20.48' y2='16' stroke='%235b97f7'/%3E%3Cline x1='6.4' y1='22.4' x2='14.72' y2='22.4' stroke='%235b97f7'/%3E%3C/g%3E%3C/svg%3E" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
   <header class="topbar">
     <div class="wrap">
-      <div class="brand"><span class="mark">T</span> Trayage</div>
+      <a class="brand" href="index.html"><span class="mark" aria-hidden="true"><svg viewBox="0 0 32 32"><g stroke-width="4.32" stroke-linecap="round"><line x1="6.4" y1="9.6" x2="26.88" y2="9.6" stroke="#ffd587"/><line x1="6.4" y1="16" x2="20.48" y2="16" stroke="#5b97f7"/><line x1="6.4" y1="22.4" x2="14.72" y2="22.4" stroke="#5b97f7"/></g></svg></span> Trayage</a>
       <nav class="nav">
-        <a href="index.html">← Back to Trayage</a>
-        <a class="ext" href="https://github.com/michaelsanford/Trayage">GitHub ↗</a>
+        <a class="ext" href="https://github.com/michaelsanford/Trayage">GitHub</a>
       </nav>
     </div>
   </header>
 
   <section>
-    <div class="wrap">
-      <div class="section-head">
-        <div class="kicker">Privacy</div>
-        <h2>Trayage collects nothing.</h2>
-        <p>No analytics, no telemetry, no tracking, no accounts, no servers of ours. There is
-          nothing to collect because Trayage has nowhere to send it.</p>
-      </div>
+    <div class="wrap legal">
+      <h2>Privacy</h2>
+      <p class="intro">Trayage has no analytics, no telemetry, no tracking, no user accounts and no servers of its own. It does not collect any data, because there is nowhere for it to send data.</p>
 
-      <div class="legal">
-        <h3>What stays on your device</h3>
-        <p>Everything Trayage stores lives only on your own machine, under
-          <code>%APPDATA%\Trayage</code>, and is never transmitted to us:</p>
-        <ul>
-          <li><strong>OAuth tokens</strong> — one set per connected account, each encrypted at rest
-            with Windows DPAPI (per-user, per-machine).</li>
-          <li><strong>Settings</strong> — your poll interval, theme, and the accounts you have
-            connected along with the repositories each one watches.</li>
-          <li><strong>Logs</strong> — a local application log and crash log for troubleshooting.
-            Tokens are never written to them, and account identifiers (your provider login and
-            user ID) are kept out on a best-effort basis.</li>
-        </ul>
+      <h3>What stays on your device</h3>
+      <p>Everything Trayage stores is kept on your own PC, under <code>%APPDATA%\Trayage</code>, and is never sent to the developer:</p>
+      <ul>
+        <li><strong>OAuth tokens.</strong> One set per connected account, encrypted with Windows DPAPI so only your Windows account on that PC can read them.</li>
+        <li><strong>Settings.</strong> Your poll interval, theme, and the accounts you have connected, along with the repositories each one watches.</li>
+        <li><strong>Logs.</strong> A local application log and crash log for troubleshooting. Tokens are never written to them, and Trayage tries to keep account identifiers (your login and user ID on each service) out of them as well.</li>
+      </ul>
 
-        <h3>Where your data goes</h3>
-        <p>Trayage talks <strong>directly</strong> to GitHub, Bitbucket and GitLab from your machine,
-          as you, using the tokens you authorised — solely to read your inbox and open pages you click.
-          Each account is used only against its own service.
-          There is no Trayage server in the middle. Your use of those services is governed by
-          their own privacy policies, not this one.</p>
+      <h3>Where your data goes</h3>
+      <p>Trayage connects directly from your PC to GitHub, Bitbucket and GitLab, signed in as you with the tokens you authorized. It uses them only to read your inbox and to open the pages you click. Each account is only used with its own service. There is no Trayage server in between. Your use of those services is covered by their own privacy policies, not this one.</p>
 
-        <h3>This website</h3>
-        <p>This page is a static site hosted on GitHub Pages. It sets no cookies and runs no
-          analytics. In the interest of full honesty, it does make a few third-party requests
-          that necessarily share your IP address with those providers:</p>
-        <ul>
-          <li><strong>GitHub</strong> — serving the page (GitHub Pages) and, on the home page only, a
-            request to the public GitHub API to show the latest release version.</li>
-          <li><strong>Google Fonts</strong> — the page's fonts are loaded from Google's font CDN.</li>
-        </ul>
-        <p>None of these are operated by Trayage, and none receive any personal data from us.</p>
+      <h3>This website</h3>
+      <p>This site is a static site hosted on GitHub Pages. It sets no cookies, runs no analytics and loads no web fonts. Text is shown in fonts already installed on your device. Two kinds of request go to GitHub, which therefore sees your IP address:</p>
+      <ul>
+        <li>Loading the pages themselves, which GitHub Pages serves.</li>
+        <li>On the home page only, one request to the public GitHub API to show the version number of the latest release.</li>
+      </ul>
+      <p>Trayage does not operate GitHub and does not send it any personal data.</p>
 
-        <h3>Changes</h3>
-        <p>If this policy ever changes, the update will appear here in the repository's history.
-          Questions? Open an issue on
-          <a href="https://github.com/michaelsanford/Trayage/issues">GitHub</a>.</p>
+      <h3>Changes</h3>
+      <p>If this policy changes, the change will be visible in the repository's history. If you have a question, open an issue on <a href="https://github.com/michaelsanford/Trayage/issues">GitHub</a>.</p>
 
-        <p class="updated">Last updated: 16 June 2026</p>
-      </div>
+      <p class="updated">Last updated 13 November 2026</p>
     </div>
   </section>
 
   <footer>
     <div class="wrap">
       <div>
-        <div class="brand"><span class="mark">T</span> Trayage</div>
-        <p class="muted">Successor to <a href="https://github.com/michaelsanford/bittray">bittray</a>. Not affiliated with or endorsed by GitHub or Atlassian.</p>
+        <div class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 32 32"><g stroke-width="4.32" stroke-linecap="round"><line x1="6.4" y1="9.6" x2="26.88" y2="9.6" stroke="#ffd587"/><line x1="6.4" y1="16" x2="20.48" y2="16" stroke="#5b97f7"/><line x1="6.4" y1="22.4" x2="14.72" y2="22.4" stroke="#5b97f7"/></g></svg></span> Trayage</div>
+        <p class="muted">Successor to <a href="https://github.com/michaelsanford/bittray">bittray</a>. Not affiliated with or endorsed by GitHub, Atlassian or GitLab.</p>
       </div>
       <div class="f-links">
         <a href="index.html">Home</a>
