@@ -65,7 +65,31 @@ public sealed class GitLabProvider : IInboxProvider
     /// The account's own instance when set, else the app-wide default (gitlab.com). Reads the
     /// settings file, so hot paths take it once per operation rather than per request.
     /// </summary>
-    private string InstanceUrl => (_account.BaseUrl is { Length: > 0 } url ? url : _options.BaseUrl).TrimEnd('/');
+    private string InstanceUrl => NormalizeInstanceUrl(_account.BaseUrl is { Length: > 0 } url ? url : _options.BaseUrl);
+
+    /// <summary>
+    /// Forces the instance URL onto https, whatever scheme (if any) was configured: the device
+    /// code, OAuth tokens and bearer-authenticated API calls all go to this host, so they must
+    /// never travel in cleartext. <c>http://gitlab.example.com:8080/</c> becomes
+    /// <c>https://gitlab.example.com:8080</c>; a bare host gains the scheme. Any query or
+    /// fragment is dropped so it can't corrupt the endpoint paths built on top of it.
+    /// </summary>
+    internal static string NormalizeInstanceUrl(string raw)
+    {
+        var trimmed = raw.Trim();
+        var schemeEnd = trimmed.IndexOf("://", StringComparison.Ordinal);
+        var rest = schemeEnd >= 0 ? trimmed[(schemeEnd + 3)..] : trimmed;
+
+        if (rest.Length == 0
+            || !Uri.TryCreate($"https://{rest}", UriKind.Absolute, out var uri)
+            || string.IsNullOrEmpty(uri.Host))
+        {
+            throw new ProviderNotConfiguredException(
+                $"The GitLab instance URL '{raw}' isn't a valid address.");
+        }
+
+        return uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+    }
 
     private string DeviceAuthEndpoint => $"{InstanceUrl}/oauth/authorize_device";
 
