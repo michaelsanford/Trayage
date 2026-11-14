@@ -1,6 +1,6 @@
 // Fill the Download button's version label from the latest GitHub release.
 // Progressive enhancement: the button always links to /releases/latest, so it
-// works with JavaScript disabled — this only upgrades the label text.
+// works with JavaScript disabled. This only upgrades the label text.
 (function () {
   "use strict";
   var label = document.getElementById("dlver");
@@ -16,7 +16,7 @@
     })
     .then(function (release) {
       if (release && release.tag_name) {
-        label.textContent = " " + release.tag_name;
+        label.textContent = release.tag_name;
       }
     })
     .catch(function () {
